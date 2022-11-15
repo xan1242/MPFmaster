@@ -72,6 +72,8 @@ This tool isn't perfect. It doesn't generate quite identical files to the origin
 
 - Clean up the code - everything is jammed in the main cpp file!
 
+- Documentation about the syntax and available commands!
+
 # Credits
 
 - Nicknine - the initial mpftotext script from which this tool was based on
