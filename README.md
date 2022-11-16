@@ -4,7 +4,21 @@ This tool is designed to decompile and compile the Pathfinder files used for int
 
 ## Compatibility
 
-This tool was only tested with Need for Speed Most Wanted and Need for Speed Pro Street, so YMMV on other titles (e.g. Red Alert 3)
+This tool should work with any Pathfinder v5 file.
+
+Some of the games are:
+
+- Need for Speed Most Wanted (2005)
+
+- Need for Speed Carbon
+
+- Need for Speed Pro Street
+
+- Need for Speed Undercover
+
+- Need for Speed World
+
+- Red Alert 3 (sample extraction is broken because of separate MUS files)
 
 ## Usage
 
@@ -73,6 +87,8 @@ This tool isn't perfect. It doesn't generate quite identical files to the origin
 - Documentation about the syntax and available commands!
 
 - Test with other games!
+
+- Figure out sample extraction & repacking for Red Alert 3 -- maybe add a mode for separate files (or MPF updating only mode, no repacking)
 
 # Credits
 
