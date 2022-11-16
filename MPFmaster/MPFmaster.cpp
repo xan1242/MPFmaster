@@ -25,6 +25,7 @@
 #include <string>
 #include <algorithm>
 #include <stdlib.h>
+#include "bswap.h"
 #include "PathFinderStructs.h"
 using namespace std;
 
@@ -778,8 +779,14 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
         if (stat(outparam, &st))
         {
             cout << "Creating folder: " << outparam << '\n';
-            mbstowcs(MkDirPath, outparam, 1024);
-            _wmkdir(MkDirPath);
+            //mbstowcs(MkDirPath, outparam, 1024);
+            //_wmkdir(MkDirPath);
+
+#if defined(_WIN32)
+            _mkdir(outparam);
+#else
+            mkdir(outparam, 0770);
+#endif
         }
         outfolder = outparam;
     }
@@ -897,7 +904,7 @@ uint32_t read_patch(void* sf, off_t* offset) {
     (*offset)++;
 
     if (byte_count == 0xFF) { /* signals 32b size (ex. custom user data) */
-        (*offset) += 4 + _byteswap_ulong(*(uint32_t*)((size_t)sf + *offset));
+        (*offset) += 4 + bswap_32(*(uint32_t*)((size_t)sf + *offset));
         return 0;
     }
 
@@ -2460,8 +2467,8 @@ int CompilerParseLine(char* line)
         PATHNAMEDVAR var = { 0 };
         cmpROUTERType router;
         cmpPATHTRACKINFO trackinfo = { 0 };
-        cmpPATHFINDNODE node = { 0 };
-        cmpPATHEVENT evt = { 0 };
+        cmpPATHFINDNODE node = { };
+        cmpPATHEVENT evt = { };
         uint32_t val = 0;
     
         switch (CompilerGetMainTokenType(line))
