@@ -2118,6 +2118,11 @@ int cmpParseACTION(char* line)
                     break;
                 }
 
+                if (act.assess == PATHASSESS_ELSE) // if it's an ELSE, stop parsing immediately, we have nothing more to parse!
+                {
+                    break;
+                }
+
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing starting space, at line " << cmpCurLine << '\n';
                 return -1;
             }
@@ -2128,6 +2133,10 @@ int cmpParseACTION(char* line)
             if (act.assess == PATHASSESS_ENDIF) // if it's an ENDIF, stop parsing immediately, we have nothing more to parse!
             {
                 act.track = 0xFFFFFFFF;
+                break;
+            }
+            if (act.assess == PATHASSESS_ELSE) // if it's an ELSE, stop parsing immediately, we have nothing more to parse!
+            {
                 break;
             }
             // get the left value
