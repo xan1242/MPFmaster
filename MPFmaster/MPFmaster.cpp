@@ -71,6 +71,8 @@ enum cmpMainTokenType
     cmpMinorRev,
     cmpReleaseRev,
     cmpPrereleaseRev,
+    cmpGenerateID,
+    cmpProjectID,
     cmpMainTokenMAX
 };
 
@@ -86,6 +88,8 @@ const char* cmpMainTokenTypeStr[] =
     "Minor",
     "Release",
     "Prerelease",
+    "GenerateID",
+    "ProjectID",
 };
 
 enum cmpParsingStatus
@@ -531,6 +535,8 @@ int MPFtoTXT(char* mpffilename, char* txtfilename)
     fprintf(fout, "Minor %d\n", hdr.minorRev);
     fprintf(fout, "Release %d\n", hdr.release);
     fprintf(fout, "Prerelease %d\n", hdr.prerelease);
+    fprintf(fout, "GenerateID %d\n", hdr.generateID);
+    fprintf(fout, "ProjectID %d\n", hdr.projectID);
 
     // Read named vars
     fseek(f, hdr.namedvars, SEEK_SET);
@@ -2795,6 +2801,12 @@ int CompilerParseLine(char* line)
             break;
         case cmpPrereleaseRev:
             hdr.prerelease = (uint8_t)stoi(token);
+            break;
+        case cmpGenerateID:
+            hdr.generateID = (uint16_t)stoi(token);
+            break;
+        case cmpProjectID:
+            hdr.projectID = (uint8_t)stoi(token);
             break;
         default:
             if (!isspace(*token) && (strlen(token) > 0))
