@@ -58,21 +58,21 @@ Example: you want to edit something in the existing track files...
 
 This tool isn't perfect. It doesn't generate quite identical files to the originals, but they do work.
 
-- EA Layer 3 duration detection! This is key for updating the samples for Pro Street and Undercover!
-
 - Big endian support for consoles
 
-- Try out compiling with gcc/clang
+- Try out compiling with gcc/clang -- currently works in macOS, still need make a CMakeLists
 
-- Figure out where and why trackID -1 is used in actions
+- Figure out why some variable types don't get updates for certain actions (mostly fixed)
 
-- Figure out why some variable types don't get updates for certain actions
+- Multi track support? Currently it assumes each event action is track 1
 
 - Improve the parser - it's currently a hackjob working on a line-per-line basis
 
 - Clean up the code - everything is jammed in the main cpp file!
 
 - Documentation about the syntax and available commands!
+
+- Test with other games!
 
 # Credits
 

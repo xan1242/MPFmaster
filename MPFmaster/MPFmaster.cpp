@@ -3,7 +3,6 @@
 // highly based on tool by Nicknine (mpf2txt.py / mpftotext.py)
 
 // TODO: big endian
-// TODO: EALayer3 duration detection!
 
 #if defined (_WIN32) || defined (_WIN64)
 #define path_separator "\\"
