@@ -130,6 +130,7 @@
     <ClCompile Include="MPFmaster.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bswap.h" />
     <ClInclude Include="PathFinderStructs.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

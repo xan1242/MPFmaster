@@ -416,13 +416,13 @@ void fprintDividerLine(FILE* f, char start, char repeat, char end, int count)
 bool MPF_ValidateHeader(PATHFINDHEADER *hdr) {
     if (hdr->id != PATHFINDER_MAGIC)
     {
-        cout << "Bad header magic! Expected: 0x" << std::uppercase << std::hex << PATHFINDER_MAGIC << ", Got: 0x" << std::uppercase << std::hex << hdr.id << '\n';
+        cout << "Bad header magic! Expected: 0x" << std::uppercase << std::hex << PATHFINDER_MAGIC << ", Got: 0x" << std::uppercase << std::hex << hdr->id << '\n';
         return false;
     }
 
     if (hdr->majorRev != PATH_SUPPORTED_VERSION)
     {
-        cout << "Unsupported PATH version! Expected: " << PATH_SUPPORTED_VERSION << ", Got: " << (int) hdr.majorRev << '\n';
+        cout << "Unsupported PATH version! Expected: " << PATH_SUPPORTED_VERSION << ", Got: " << (int) hdr->majorRev << '\n';
         return false;
     }
 
@@ -779,11 +779,9 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
         if (stat(outparam, &st))
         {
             cout << "Creating folder: " << outparam << '\n';
-            //mbstowcs(MkDirPath, outparam, 1024);
-            //_wmkdir(MkDirPath);
-
 #if defined(_WIN32)
-            _mkdir(outparam);
+            mbstowcs(MkDirPath, outparam, 1024);
+            _wmkdir(MkDirPath);
 #else
             mkdir(outparam, 0770);
 #endif
