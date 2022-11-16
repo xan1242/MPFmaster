@@ -1328,7 +1328,7 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
 
             uint32_t sample_rate = (header1 >> 0) & 0x03FFFF;
             uint32_t num_samples = (header2 >> 0) & 0x1FFFFFFF;
-            long long unsigned int length_ms = (num_samples * 1000) / num_samples;
+            long long unsigned int length_ms = (num_samples * 1000) / sample_rate;
             sampleLengths.push_back(length_ms);
 
             free(sampdata);
