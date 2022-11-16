@@ -43,7 +43,6 @@ vector<uint32_t> trackinfoOffsets;
 vector<uint32_t> sampleOffsets;
 vector<uint32_t> sampleLengths;
 
-
 char varstr[8][32];
 int curvarstr = 0;
 
@@ -57,7 +56,8 @@ char OutPath[1024];
 
 // sample updater
 vector<string> FileDirectoryListing;
-//int FileCount = 0;
+vector<string> FileDirectoryListing_SNS;
+bool bEALayer3Mode = false;
 
 // compiler stuff start
 enum cmpMainTokenType
@@ -68,6 +68,10 @@ enum cmpMainTokenType
     cmpTRACK,
     cmpNODE,
     cmpEVENT,
+    cmpMajorRev,
+    cmpMinorRev,
+    cmpReleaseRev,
+    cmpPrereleaseRev,
     cmpMainTokenMAX
 };
 
@@ -78,7 +82,11 @@ const char* cmpMainTokenTypeStr[] =
     "Router",
     "Track",
     "Node",
-    "Event"
+    "Event",
+    "Major",
+    "Minor",
+    "Release",
+    "Prerelease",
 };
 
 enum cmpParsingStatus
@@ -277,6 +285,8 @@ struct MUSHeaderInfo
     uint32_t pad;
 };
 
+vector<MUSHeaderInfo> EAL3HeaderInfos;
+
 enum SampleFileType
 {
     sftNONE,
@@ -332,7 +342,29 @@ DWORD GetDirectoryListing(const char* FolderPath)
         if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
         {
             wcstombs(MBFilename, ffd.cFileName, MAX_PATH);
-            FileDirectoryListing.push_back(MBFilename);
+            string ext(MBFilename);
+            if ((ext.find(SNR_FILE_EXT) != string::npos))
+            {
+                if (!bEALayer3Mode)
+                {
+                    cout << "Going into EALayer3 mode!\n";
+                    bEALayer3Mode = true;
+                }
+                FileDirectoryListing.push_back(MBFilename);
+            }
+            else if ((ext.find(SNS_FILE_EXT) != string::npos))
+            {
+                if (!bEALayer3Mode)
+                {
+                    cout << "Going into EALayer3 mode!\n";
+                    bEALayer3Mode = true;
+                }
+                FileDirectoryListing_SNS.push_back(MBFilename);
+            }
+            else if (!bEALayer3Mode)
+            {
+                FileDirectoryListing.push_back(MBFilename);
+            }
         }
     } while (FindNextFile(hFind, &ffd) != 0);
 
@@ -491,6 +523,15 @@ int MPFtoTXT(char* mpffilename, char* txtfilename)
         fclose(f);
         return -1;
     }
+
+    // Read version info
+    fprintDividerLine(fout, '#', '-', 0, 72);
+    fputs("# Version info\n", fout);
+    fprintDividerLine(fout, '#', '-', 0, 72);
+    fprintf(fout, "Major %d\n", hdr.majorRev);
+    fprintf(fout, "Minor %d\n", hdr.minorRev);
+    fprintf(fout, "Release %d\n", hdr.release);
+    fprintf(fout, "Prerelease %d\n", hdr.prerelease);
 
     // Read named vars
     fseek(f, hdr.namedvars, SEEK_SET);
@@ -808,8 +849,6 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
 
     struct stat st = { 0 };
 
-    bool bEALayer3Mode = false;
-
     // extract the sample files themselves first
     // the sample offset list is always at the end of MPF (it has to be because it has no size descriptor)
     
@@ -862,7 +901,10 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
             const char* file_ext = SampleFileTypeStr[ftype];
 
             if ((ftype == sftEAL3) && !bEALayer3Mode)
+            {
+                cout << "Going into EALayer3 mode!\n";
                 bEALayer3Mode = true;
+            }
 
             // open the new file
             if (index == -1)
@@ -932,7 +974,7 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
 
                 // open the new file
                 if (index == -1)
-                    sprintf(SampleFilePath, "%s%s%d.snr", outfolder, path_separator, i + 1);
+                    sprintf(SampleFilePath, "%s%s%d%s", outfolder, path_separator, i + 1, SNR_FILE_EXT);
                 else
                 {
                     if (outparam == NULL)
@@ -940,9 +982,9 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
                         strcpy(SampleFilePath, mpffilename);
                         char* pathpoint = strrchr(SampleFilePath, path_separator_char);
                         if (pathpoint)
-                            sprintf(pathpoint, "%s%d.snr", path_separator, i + 1);
+                            sprintf(pathpoint, "%s%d%s", path_separator, i + 1, SNR_FILE_EXT);
                         else
-                            sprintf(SampleFilePath, "%d.snr", i + 1);
+                            sprintf(SampleFilePath, "%d%s", i + 1, SNR_FILE_EXT);
                     }
                     else
                         strcpy(SampleFilePath, outparam);
@@ -1189,7 +1231,7 @@ uint32_t GetSampleMSLength_GSTR(void* in)
     if ((num_samples == 0) || sample_rate == 0)
         return 0;
 
-    uint32_t msLength = (num_samples * 1000) / sample_rate;
+    long long unsigned int msLength = (num_samples * 1000) / sample_rate;
     return msLength;
 }
 
@@ -1235,6 +1277,66 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
     void* sampdata;
     struct stat st = { 0 };
 
+    // space for header infos
+    if (bEALayer3Mode)
+    {
+        fseek(fmus, 4, SEEK_SET);
+        fwrite(&LastSample, sizeof(uint32_t), 1, fmus);
+        fseek(fmus, 0x28, SEEK_SET);
+
+        size_t headers_size = sizeof(MUSHeaderInfo) * LastSample;
+        fseek(fmus, 0x28 + headers_size, SEEK_SET);
+
+        for (int i = 1; i <= LastSample; i++)
+        {
+            MUSHeaderInfo hi = { 0 };
+            hi.index = i - 1;
+            hi.hash = 0xDEADBEEF;
+
+            // align by 0x10 bytes
+            size_t mus_offset = ftell(fmus);
+            if (mus_offset % 0x10)
+                mus_offset = mus_offset - (mus_offset % 0x10) + 0x10;
+
+            hi.HeaderOffset = mus_offset / 0x10;
+            fseek(fmus, mus_offset, SEEK_SET);
+
+            sprintf(sampname, "%s%s%d%s", samplefolder, path_separator, i, SNR_FILE_EXT);
+
+            cout << "Reading: " << sampname << '\n';
+            fsamp = fopen(sampname, "rb");
+            if (!fsamp)
+            {
+                cout << "Can't open file " << sampname << " for reading: " << strerror(errno) << '\n';
+                if (fmus)
+                    fclose(fmus);
+                return -1;
+            }
+
+            stat(sampname, &st);
+            hi.HeaderSize = st.st_size;
+
+            EAL3HeaderInfos.push_back(hi);
+
+            sampdata = malloc(st.st_size);
+            fread(sampdata, st.st_size, 1, fsamp);
+            fwrite(sampdata, st.st_size, 1, fmus);
+
+            // while here, get the sample length
+            uint32_t header1 = bswap_32(*(uint32_t*)(sampdata));
+            uint32_t header2 = bswap_32(*(uint32_t*)((size_t)sampdata + sizeof(uint32_t)));
+
+            uint32_t sample_rate = (header1 >> 0) & 0x03FFFF;
+            uint32_t num_samples = (header2 >> 0) & 0x1FFFFFFF;
+            long long unsigned int length_ms = (num_samples * 1000) / num_samples;
+            sampleLengths.push_back(length_ms);
+
+            free(sampdata);
+
+            fclose(fsamp);
+        }
+    }
+
     for (int i = 1; i <= LastSample; i++)
     {
         // align by 0x80 bytes
@@ -1244,8 +1346,13 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
         fseek(fmus, mus_offset, SEEK_SET);
 
         sampleOffsets.push_back(mus_offset / 0x80);
-
-        sprintf(sampname, "%s%s%d%s", samplefolder, path_separator, i, ".asf");
+        if (bEALayer3Mode)
+        {
+            sprintf(sampname, "%s%s%d%s", samplefolder, path_separator, i, SNS_FILE_EXT);
+            EAL3HeaderInfos.at(i - 1).DataOffset = mus_offset / 0x80;
+        }
+        else
+            sprintf(sampname, "%s%s%d%s", samplefolder, path_separator, i, ASF_FILE_EXT);
 
         cout << "Reading: " << sampname << '\n';
 
@@ -1258,13 +1365,17 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
             return -1;
         }
         stat(sampname, &st);
+
+        if (bEALayer3Mode)
+            EAL3HeaderInfos.at(i - 1).DataSize = st.st_size;
+
         sampdata = malloc(st.st_size);
         fread(sampdata, st.st_size, 1, fsamp);
         fwrite(sampdata, st.st_size, 1, fmus);
 
-        // get sample length
+        // get sample length for GSTR
         uint32_t magic = *(uint32_t*)sampdata;
-        if (magic == EA_SCHL_MAGIC)
+        if ((magic == EA_SCHL_MAGIC) && !bEALayer3Mode)
         {
             sampleLengths.push_back(GetSampleMSLength_GSTR(sampdata));
         }
@@ -1273,6 +1384,17 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
 
         fclose(fsamp);
     }
+
+    // go back and write the infos...
+    if (bEALayer3Mode)
+    {
+        fseek(fmus, 0x28, SEEK_SET);
+        for (int i = 0; i < LastSample; i++)
+        {
+            fwrite(&(EAL3HeaderInfos.at(i)), sizeof(MUSHeaderInfo), 1, fmus);
+        }
+    }
+
     fclose(fmus);
 
     // re-generate MPF with new offsets
@@ -2644,6 +2766,18 @@ int CompilerParseLine(char* line)
             cmpEvents.push_back(evt);
             cmpCurrentPS = cmpPS_EVENT;
             break;
+        case cmpMajorRev:
+            hdr.majorRev = (uint8_t)stoi(token);
+            break;
+        case cmpMinorRev:
+            hdr.minorRev = (uint8_t)stoi(token);
+            break;
+        case cmpReleaseRev:
+            hdr.release = (uint8_t)stoi(token);
+            break;
+        case cmpPrereleaseRev:
+            hdr.prerelease = (uint8_t)stoi(token);
+            break;
         default:
             if (!isspace(*token) && (strlen(token) > 0))
             {
@@ -2877,10 +3011,14 @@ int MPFCompiler(char* txtfilename, char* mpffilename)
     // link everything and create a binary
     // prepare known header data...
     hdr.id = PATHFINDER_MAGIC;
-    hdr.majorRev = PATH_SUPPORTED_VERSION;
-    hdr.minorRev = 1;
-    hdr.release = 0xB0;
-    hdr.prerelease = 1;
+    if (hdr.majorRev == 0)
+        hdr.majorRev = PATH_SUPPORTED_VERSION;
+    if (hdr.minorRev == 0)
+        hdr.minorRev = 1;
+    if (hdr.release == 0)
+        hdr.release = 0xB0;
+    if (hdr.prerelease == 0)
+        hdr.prerelease = 1;
     hdr.numtracks = cmpTrackInfos.size();
     hdr.numsections = cmpNumSections;
     hdr.numevents = cmpEvents.size();
