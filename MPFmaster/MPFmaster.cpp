@@ -412,6 +412,22 @@ void fprintDividerLine(FILE* f, char start, char repeat, char end, int count)
     fputc('\n', f);
 }
 
+bool MPF_ValidateHeader(PATHFINDHEADER *hdr) {
+    if (hdr->id != PATHFINDER_MAGIC)
+    {
+        cout << "Bad header magic! Expected: 0x" << std::uppercase << std::hex << PATHFINDER_MAGIC << ", Got: 0x" << std::uppercase << std::hex << hdr.id << '\n';
+        return false;
+    }
+
+    if (hdr->majorRev != PATH_SUPPORTED_VERSION)
+    {
+        cout << "Unsupported PATH version! Expected: " << PATH_SUPPORTED_VERSION << ", Got: " << (int) hdr.majorRev << '\n';
+        return false;
+    }
+
+    return true;
+}
+
 int MPFtoTXT(char* mpffilename, char* txtfilename)
 {
     FILE* f = fopen(mpffilename, "rb");
@@ -423,16 +439,8 @@ int MPFtoTXT(char* mpffilename, char* txtfilename)
 
     fread(&hdr, sizeof(PATHFINDHEADER), 1, f);
 
-    if (hdr.id != PATHFINDER_MAGIC)
+    if (!MPF_ValidateHeader(&hdr))
     {
-        cout << "Bad header magic! Expected: 0x" << std::uppercase << std::hex << PATHFINDER_MAGIC << ", Got: 0x" << std::uppercase << std::hex << hdr.id << '\n';
-        fclose(f);
-        return -1;
-    }
-
-    if (hdr.majorRev != PATH_SUPPORTED_VERSION)
-    {
-        cout << "Unsupported PATH version! Expected: 0x" << PATH_SUPPORTED_VERSION << ", Got: 0x" << hdr.majorRev << '\n';
         fclose(f);
         return -1;
     }
@@ -734,16 +742,8 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
 
     fread(&hdr, sizeof(PATHFINDHEADER), 1, f);
 
-    if (hdr.id != PATHFINDER_MAGIC)
+    if (!MPF_ValidateHeader(&hdr))
     {
-        cout << "Bad header magic! Expected: " << std::uppercase << std::hex << PATHFINDER_MAGIC << ", Got: " << std::uppercase << std::hex << hdr.id << '\n';
-        fclose(f);
-        return -1;
-    }
-
-    if (hdr.majorRev != PATH_SUPPORTED_VERSION)
-    {
-        cout << "Unsupported PATH version! Expected: " << PATH_SUPPORTED_VERSION << ", Got: " << hdr.majorRev << '\n';
         fclose(f);
         return -1;
     }
