@@ -3171,7 +3171,7 @@ int MPFCompiler(char* txtfilename, char* mpffilename)
     fclose(fout);
     fclose(f);
 
-    cout << "Compilation completed without errors.\nRemember to add the samples with the \"update samples (-ua)\" command before using the file!\n";
+    cout << "Compilation completed without errors.\nRemember to add the samples with the \"update samples (-su)\" command before using the file!\n";
 
     return 0;
 }
