@@ -51,7 +51,7 @@ Example: you want to edit something in the existing track files...
 - Update the samples
   
   ```
-  mpfmaster -su mynfsMPF.mpf mySampleFolder
+  mpfmaster -su mynewMPF.mpf mySampleFolder
   ```
 
 ## TODO

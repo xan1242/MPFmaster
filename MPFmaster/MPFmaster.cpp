@@ -29,7 +29,10 @@
 #include "PathFinderStructs.h"
 using namespace std;
 
-#define MUS_SAMPLE_FILE_EXT ".bin"
+//#define MUS_SAMPLE_FILE_EXT ".bin"
+#define ASF_FILE_EXT ".asf"
+#define SNS_FILE_EXT ".sns"
+#define SNR_FILE_EXT ".snr"
 
 PATHFINDHEADER hdr;
 vector<PATHNAMEDVAR> namedvars;
@@ -261,6 +264,41 @@ vector<uint32_t> cmpRouterOffsets;
 vector<uint32_t> cmpTrackOffsets;
 
 // compiler stuff end
+
+// https://github.com/Medstar117/RA3MusEditor/blob/master/pathmusic.txt#L23
+struct MUSHeaderInfo
+{
+    uint32_t hash;
+    uint32_t index;
+    uint32_t HeaderOffset; // *0x10
+    uint32_t DataOffset; // *0x80
+    uint32_t HeaderSize;
+    uint32_t DataSize;
+    uint32_t pad;
+};
+
+enum SampleFileType
+{
+    sftNONE,
+    sftASF,
+    sftEAL3,
+    sftMAX
+};
+
+const char* SampleFileTypeStr[] =
+{
+    ".bin",
+    ASF_FILE_EXT,
+    SNS_FILE_EXT,
+};
+
+SampleFileType GetSampleFileType(uint32_t magic)
+{
+    if (magic == EA_SCHL_MAGIC) // TODO: add better detection mechanic
+        return sftASF;
+    return sftEAL3; // TODO: add detection for EA Layer 3...
+}
+
 
 #ifdef WIN32
 DWORD GetDirectoryListing(const char* FolderPath)
@@ -770,6 +808,8 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
 
     struct stat st = { 0 };
 
+    bool bEALayer3Mode = false;
+
     // extract the sample files themselves first
     // the sample offset list is always at the end of MPF (it has to be because it has no size descriptor)
     
@@ -809,14 +849,24 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
         if ((index == i + 1) || index == -1)
         {
             uint32_t size = 0;
+            uint32_t magic = 0;
             if (i == sampleOffsets.size() - 1)
                 size = st.st_size - sampleOffsets.at(i);
             else
                 size = sampleOffsets.at(i + 1) - sampleOffsets.at(i);
 
+            // get file extension
+            fread(&magic, sizeof(uint32_t), 1, fmus);
+            fseek(fmus, sampleOffsets[i], SEEK_SET);
+            SampleFileType ftype = GetSampleFileType(magic);
+            const char* file_ext = SampleFileTypeStr[ftype];
+
+            if ((ftype == sftEAL3) && !bEALayer3Mode)
+                bEALayer3Mode = true;
+
             // open the new file
             if (index == -1)
-                sprintf(SampleFilePath, "%s%s%d%s", outfolder, path_separator, i + 1, MUS_SAMPLE_FILE_EXT);
+                sprintf(SampleFilePath, "%s%s%d%s", outfolder, path_separator, i + 1, file_ext);
             else
             {
                 if (outparam == NULL)
@@ -824,9 +874,9 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
                     strcpy(SampleFilePath, mpffilename);
                     char* pathpoint = strrchr(SampleFilePath, path_separator_char);
                     if (pathpoint)
-                        sprintf(pathpoint, "%s%d%s", path_separator, i + 1, MUS_SAMPLE_FILE_EXT);
+                        sprintf(pathpoint, "%s%d%s", path_separator, i + 1, file_ext);
                     else
-                        sprintf(SampleFilePath, "%d%s", i + 1, MUS_SAMPLE_FILE_EXT);
+                        sprintf(SampleFilePath, "%d%s", i + 1, file_ext);
                 }
                 else
                     strcpy(SampleFilePath, outparam);
@@ -844,13 +894,90 @@ int MPF_ExtractSamples(char* mpffilename, char* outparam, int index)
             }
             
             filebuf = malloc(size);
-            fread(filebuf, size, 1, fmus);
-            fwrite(filebuf, size, 1, fsamp);
-            if (fsamp)
-                fclose(fsamp);
+            if (filebuf)
+            {
+                fread(filebuf, size, 1, fmus);
+                fwrite(filebuf, size, 1, fsamp);
+                if (fsamp)
+                    fclose(fsamp);
 
 
-            free(filebuf);
+                free(filebuf);
+            }
+            else
+            {
+                return -1;
+            }
+        }
+    }
+
+    // if we're in EALayer3 mode, we need the headers extracted too
+    if (bEALayer3Mode)
+    {
+        uint32_t hdrcount = 0;
+        MUSHeaderInfo hi = { 0 };
+        size_t previous_pos = 0;
+        fseek(fmus, 4, SEEK_SET);
+        fread(&hdrcount, sizeof(uint32_t), 1, fmus);
+        fseek(fmus, 0x28, SEEK_SET);
+
+        for (int i = 0; i < hdrcount; i++)
+        {
+            if ((index == i + 1) || index == -1)
+            {
+                fread(&hi, sizeof(MUSHeaderInfo), 1, fmus);
+                previous_pos = ftell(fmus);
+                uint32_t offset = hi.HeaderOffset * 0x10;
+                fseek(fmus, offset, SEEK_SET);
+
+                // open the new file
+                if (index == -1)
+                    sprintf(SampleFilePath, "%s%s%d.snr", outfolder, path_separator, i + 1);
+                else
+                {
+                    if (outparam == NULL)
+                    {
+                        strcpy(SampleFilePath, mpffilename);
+                        char* pathpoint = strrchr(SampleFilePath, path_separator_char);
+                        if (pathpoint)
+                            sprintf(pathpoint, "%s%d.snr", path_separator, i + 1);
+                        else
+                            sprintf(SampleFilePath, "%d.snr", i + 1);
+                    }
+                    else
+                        strcpy(SampleFilePath, outparam);
+                }
+                cout << "Extracting: " << SampleFilePath << '\n';
+                fsamp = fopen(SampleFilePath, "wb");
+                if (!fsamp)
+                {
+                    cout << "Can't open file " << SampleFilePath << " for writing: " << strerror(errno) << '\n';
+                    if (fmus)
+                        fclose(fmus);
+                    if (f)
+                        fclose(f);
+                    return -1;
+                }
+
+                filebuf = malloc(hi.HeaderSize);
+                if (filebuf)
+                {
+                    fread(filebuf, hi.HeaderSize, 1, fmus);
+                    fwrite(filebuf, hi.HeaderSize, 1, fsamp);
+                    if (fsamp)
+                        fclose(fsamp);
+
+
+                    free(filebuf);
+                }
+                else
+                {
+                    return -1;
+                }
+
+
+                fseek(fmus, previous_pos, SEEK_SET);
+            }
         }
     }
 
@@ -876,14 +1003,14 @@ int GetHighestSampleNumName()
         cursor = strchr(sampname, '.');
         if (!cursor)
         {
-            cout << "File " << FileDirectoryListing.at(i) << " does not have a valid file extension. Please use only use files with decimal integer names and " << MUS_SAMPLE_FILE_EXT << " extension.\n";
+            cout << "File " << FileDirectoryListing.at(i) << " does not have a valid file extension. Please use only use files with decimal integer names and an extension.\n";
             return -1;
         }
         *cursor = '\0';
         cmpCleanUpToken(sampname);
         if (bStringHasAlpha(sampname))
         {
-            cout << "File " << FileDirectoryListing.at(i) << " contains alphabetic characters in its name. Please use only use files with decimal integer names and " << MUS_SAMPLE_FILE_EXT << " extension.\n";
+            cout << "File " << FileDirectoryListing.at(i) << " contains alphabetic characters in its name. Please use only use files with decimal integer names and an extension.\n";
             return -1;
         }
 
@@ -1118,7 +1245,7 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
 
         sampleOffsets.push_back(mus_offset / 0x80);
 
-        sprintf(sampname, "%s%s%d%s", samplefolder, path_separator, i, MUS_SAMPLE_FILE_EXT);
+        sprintf(sampname, "%s%s%d%s", samplefolder, path_separator, i, ".asf");
 
         cout << "Reading: " << sampname << '\n';
 
