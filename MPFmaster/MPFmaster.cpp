@@ -1090,6 +1090,7 @@ uint32_t read_patch(void* sf, off_t* offset) {
     return result;
 }
 
+// code snippets from VGMStream: https://github.com/vgmstream/vgmstream/blob/50a11404e8b6949af6cc6572a99f8327842bf923/src/meta/ea_schl.c#L1557
 uint32_t GetSampleMSLength_GSTR(void* in)
 {
     void* sf = NULL;
@@ -1323,6 +1324,7 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
             fwrite(sampdata, st.st_size, 1, fmus);
 
             // while here, get the sample length
+            // credit: VGMStream: https://github.com/vgmstream/vgmstream/blob/master/src/meta/ea_eaac.c#L1155
             uint32_t header1 = bswap_32(*(uint32_t*)(sampdata));
             uint32_t header2 = bswap_32(*(uint32_t*)((size_t)sampdata + sizeof(uint32_t)));
 
