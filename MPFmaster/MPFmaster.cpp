@@ -2112,7 +2112,10 @@ int cmpParseACTION(char* line)
                 // apply the assessment type immediately
                 act.assess = cmpGetActionAssessmentType(param1);
                 if (act.assess == PATHASSESS_ENDIF) // if it's an ENDIF, stop parsing immediately, we have nothing more to parse!
+                {
+                    act.track = 0xFFFFFFFF;
                     break;
+                }
 
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing starting space, at line " << cmpCurLine << '\n';
                 return -1;
@@ -2122,7 +2125,10 @@ int cmpParseACTION(char* line)
             // apply the assessment type immediately
             act.assess = cmpGetActionAssessmentType(param1);
             if (act.assess == PATHASSESS_ENDIF) // if it's an ENDIF, stop parsing immediately, we have nothing more to parse!
+            {
+                act.track = 0xFFFFFFFF;
                 break;
+            }
             // get the left value
             cursor = strchr(line, ' ');
             cursor++;
