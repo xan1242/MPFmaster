@@ -2317,15 +2317,17 @@ int cmpParseACTION(char* line)
                 return -1;
             }
             act.act.branch.node = value;
+
             if (cmpPathActionSetValue(&act, &value, true, param2) < 0)
             {
                 cout << "ERROR: can't set Branch 'ofsection' value at line " << cmpCurLine << '\n';
                 return -1;
             }
             act.act.branch.ofsection = value;
-            //act.act.branch.ofsection = stoi(param2);
 
             act.act.branch.immediate = stoi(param3);
+            if (!act.act.branch.immediate)
+                act.rightvaluetype = 0;
 
             break;
         case PATHACTION_STRETCHFADE:
@@ -2482,7 +2484,7 @@ int cmpParseACTION(char* line)
             strcpy(param1, cursor);
             cmpCleanUpToken(param1);
             // apply the values
-            if (cmpPathActionSetValue(&act, &value, true, param1) < 0)
+            if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
             {
                 cout << "ERROR: can't set Event 'eventID' at line " << cmpCurLine << '\n';
                 return -1;
