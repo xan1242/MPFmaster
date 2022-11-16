@@ -76,4 +76,5 @@ This tool isn't perfect. It doesn't generate quite identical files to the origin
 
 # Credits
 
-- Nicknine - the initial mpftotext script from which this tool was based on
+- Nicknine - the initial mpftotext script from which this tool was based on and specific code from VGMStream
+- VGMStream project - header parsing for GSTR / EA Layer 3
