@@ -18,7 +18,7 @@ Some of the games are:
 
 - Need for Speed World
 
-- Red Alert 3 (partial support)
+- Red Alert 3
 
 ## Usage
 
@@ -47,7 +47,7 @@ Example: you want to edit something in the existing track files...
   mpfmaster MW_Music.mpf
   ```
 
-- Extract the samples
+- Extract the samples (NOTE - for multi track files, you need to do this for each mus file separately)
   
   ```
   mpfmaster -sa MW_Music.mpf MW_Music.mus mySampleFolder
@@ -61,7 +61,7 @@ Example: you want to edit something in the existing track files...
   mpfmaster -c MW_Music_decomp.txt mynewMPF.mpf
   ```
 
-- Update the samples
+- Update the samples (NOTE - for multi track files, all samples need to be in a single directory)
   
   ```
   mpfmaster -su mynewMPF.mpf mySampleFolder
@@ -76,8 +76,6 @@ This tool isn't perfect. It doesn't generate quite identical files to the origin
 - Try out compiling with gcc/clang -- currently works in macOS, still need make a CMakeLists
 
 - Figure out why some variable types don't get updates for certain actions (mostly fixed)
-
-- Multi track support? Currently it assumes each event action is track 1
 
 - Improve the parser - it's currently a hackjob working on a line-per-line basis
 
