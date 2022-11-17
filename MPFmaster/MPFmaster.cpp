@@ -1360,6 +1360,7 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
     {
         int starting_sample = trackinfos.at(t).startingsample;
         int last_sample = LastSampleFile;
+        EAL3HeaderInfos.clear();
 
         if (t != trackinfos.size() - 1)
             last_sample = trackinfos.at(t + 1).startingsample;
@@ -1474,7 +1475,7 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
             if (bEALayer3Mode)
             {
                 sprintf(sampname, "%s%s%d%s", samplefolder, path_separator, i + 1, SNS_FILE_EXT);
-                EAL3HeaderInfos.at(i).DataOffset = mus_offset / 0x80;
+                EAL3HeaderInfos.at(i - starting_sample).DataOffset = mus_offset / 0x80;
             }
             else
                 sprintf(sampname, "%s%s%d%s", samplefolder, path_separator, i + 1, ASF_FILE_EXT);
@@ -1492,7 +1493,7 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
             stat(sampname, &st);
     
             if (bEALayer3Mode)
-                EAL3HeaderInfos.at(i).DataSize = st.st_size;
+                EAL3HeaderInfos.at(i - starting_sample).DataSize = st.st_size;
     
             sampdata = malloc(st.st_size);
             fread(sampdata, st.st_size, 1, fsamp);
