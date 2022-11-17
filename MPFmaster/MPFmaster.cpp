@@ -722,11 +722,19 @@ int MPFtoTXT(char* mpffilename, char* txtfilename)
                 PATHACT* act = &(action.act);
                 fread(&action, sizeof(PATHACTION), 1, f);
 
+                int8_t track = action.track & 0xFF;
+                if (track > 0)
+                    track--;
+                auto sectionID = action.sectionID;
+
+                fprintf(fout, "(%d, %d)", track, sectionID);
+
                 if ((action.type == PATHACTION_CONDITION) && (action.assess > PATHASSESS_IF))
                     indent -= 1;
 
                 for (int k = 0; k < indent; k++)
                     fputc('\t', fout); 
+
 
                 switch (action.type)
                 {
@@ -1563,7 +1571,7 @@ int cmpParseVAR(char* line)
 {
     if (strchr(line, '='))
     {
-        char parseLine[32];
+        char parseLine[512];
         strcpy(parseLine, line);
 
         char* token = strtok(parseLine, "=");
@@ -1607,7 +1615,7 @@ int cmpParseROUTER(char* line)
     string ln(line);
     if (ln.find(">") != string::npos)
     {
-        char parseLine[32];
+        char parseLine[512];
         strcpy(parseLine, line);
 
         char* token = strtok(parseLine, ">");
@@ -1670,7 +1678,7 @@ int cmpParseTRACK(char* line)
 
     if (type)
     {
-        char parseLine[32];
+        char parseLine[512];
         strcpy(parseLine, line);
 
         char* token = strtok(parseLine, " ");
@@ -1959,7 +1967,7 @@ int cmpParseEVENT(char* line)
 
     if (type)
     {
-        char parseLine[32];
+        char parseLine[512];
         strcpy(parseLine, line);
 
         char* token = strtok(parseLine, " ");
@@ -2144,7 +2152,7 @@ int cmpPathActionSetValue(PATHACTION* act, int32_t* valPointer, bool bRight, cha
 {
     bool bHex = false;
     PATHVALUETYPE vt = cmpGetActionValueType(param, &bHex);
-    char locparam[32];
+    char locparam[512];
     strcpy(locparam, param);
 
     char* cursor = NULL;
@@ -2191,17 +2199,18 @@ int cmpPathActionSetValue(PATHACTION* act, int32_t* valPointer, bool bRight, cha
     return 0;
 }
 
-int cmpParseACTION(char* line)
+int cmpParseACTION(char* input_line)
 {
-    PATHACTIONTYPE type = cmpGetActionParserType(line);
-    char param1[32];
-    char param2[32];
-    char param3[32];
-    char param4[32];
+    PATHACTIONTYPE type = cmpGetActionParserType(input_line);
+    char* line = input_line;
+    char param1[32] = {};
+    char param2[32] = {};
+    char param3[32] = {};
+    char param4[32] = {};
 
     char* cursor = NULL;
     char* cursor2 = NULL;
-    //char* cursor3 = NULL;
+    char* cursor3 = NULL;
 
     size_t param_len = 0;
     size_t param_len2 = 0;
@@ -2215,18 +2224,60 @@ int cmpParseACTION(char* line)
         const char* actnamestr = cmpActionStrings[type];
 
         act.type = type;
-        act.track = 0x11000001; // TODO: figure this out fully, it's not always this value
+
+        // get the track and sectionID
+        // get the track param
+        cursor = strchr(line, '(') + 1;
+        if (!cursor)
+        {
+            cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing starting bracket for track and sectionID, at line " << cmpCurLine << '\n';
+            return -1;
+        }
+        cursor2 = strchr(line, ',');
+        if (!cursor2)
+        {
+            cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing comma for track and sectionID, at line " << cmpCurLine << '\n';
+            return -1;
+        }
+        strncpy(param1, cursor, cursor2 - cursor);
+        cmpCleanUpToken(param1);
+        // get the sectionID param
+        cursor = strchr(line, ',') + 1;
+        cursor2 = strchr(line, ')');
+        if (!cursor2)
+        {
+            cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing closing bracket for track and sectionID, at line " << cmpCurLine << '\n';
+            return -1;
+        }
+        strncpy(param2, cursor, cursor2 - cursor);
+        cmpCleanUpToken(param2);
+        // apply the values
+
+        act.track = stoi(param1);
+        act.sectionID = stoi(param2);
+
+        if (act.track >= 0)
+        {
+            act.track++;
+            act.track |= 0x11000000; // TODO - figure this out fully
+        }
+        // shift the line pointer to the end of the track and sectionID token
+        line = strchr(line, ')') + 1;
+        // clean it up
+        cmpCleanUpToken(line);
+
+        memset(param1, 0, 32);
+        memset(param2, 0, 32);
 
         switch (type)
         {
         case PATHACTION_CONDITION:
             // get the condition assessment param
-            strcpy(param1, line);
-            cursor = strchr(param1, ' ');
+            cursor = strchr(line, ' ');
             if (!cursor)
             {
                 // apply the assessment type immediately
-                act.assess = cmpGetActionAssessmentType(param1);
+                act.assess = cmpGetActionAssessmentType(line);
                 if (act.assess == PATHASSESS_ENDIF) // if it's an ENDIF, stop parsing immediately, we have nothing more to parse!
                 {
                     act.track = 0xFFFFFFFF;
@@ -2241,7 +2292,7 @@ int cmpParseACTION(char* line)
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing starting space, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor = '\0';
+            strncpy(param1, line, cursor - line);
             cmpCleanUpToken(param1);
             // apply the assessment type immediately
             act.assess = cmpGetActionAssessmentType(param1);
@@ -2257,34 +2308,22 @@ int cmpParseACTION(char* line)
             // get the left value
             cursor = strchr(line, ' ');
             cursor++;
-            strcpy(param2, cursor);
-            cursor2 = cmpGetActionComparatorPos(param2);
+            cursor2 = cmpGetActionComparatorPos(cursor);
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing comparison action, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param2, cursor, cursor2 - cursor);
             cmpCleanUpToken(param2);
             // get the comparison op position
-            strcpy(param3, line);
-            cursor = cmpGetActionComparatorPos(param3);
-            cursor2 = cursor;
-            cursor2++;
-            if (*cursor2 == '=')
-                cursor2++;
-            *cursor2 = '\0';
-            strcpy(param3, cursor);
+            cursor3 = cursor2 + 1;
+            if (*cursor3 == '=')
+                cursor3++;
+            strncpy(param3, cursor2, cursor3 - cursor2);
             cmpCleanUpToken(param3);
             // get the right value
-            cursor = strchr(line, ' ');
-            cursor++;
-            strcpy(param4, cursor);
-            cursor2 = cmpGetActionComparatorPos(param4);
-            cursor2++;
-            if (*cursor2 == '=')
-                cursor2++;
-            strcpy(param4, cursor2);
+            strcpy(param4, cursor3);
             cmpCleanUpToken(param4);
             // apply the values
             if (cmpPathActionSetValue(&act, &value, false, param2) < 0)
@@ -2334,52 +2373,44 @@ int cmpParseACTION(char* line)
                 return -1;
             }
             cursor++;
-            strcpy(param1, cursor);
-            cursor2 = strchr(param1, '(');
+            cursor2 = strchr(line, '(');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing opening bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param1, cursor, cursor2 - cursor);
             cmpCleanUpToken(param1);
             // get waitbeat 'every' param
-            cursor = strchr(line, '(');
-            cursor++;
-            strcpy(param2, cursor);
-            cursor2 = strchr(param2, ',');
+            cursor = strchr(line, '(') + 1;
+            cursor2 = strchr(line, ',');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing first comma, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param2, cursor, cursor2 - cursor);
             cmpCleanUpToken(param2);
             // get waitbeat 'note' param
-            cursor = strchr(line, ',');
-            cursor++;
-            strcpy(param3, cursor);
-            cursor2 = strchr(param3, ',');
+            cursor = strchr(line, ',') + 1;
+            cursor2 = strchr(cursor, ',');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing second comma, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param3, cursor, cursor2 - cursor);
             cmpCleanUpToken(param3);
             // get waitbeat 'offset' param
-            cursor = strchr(line, ',');
-            cursor++;
-            cursor = strchr(cursor, ',');
-            cursor++;
-            strcpy(param4, cursor);
-            cursor2 = strchr(param4, ')');
+            cursor = strchr(line, ',') + 1;
+            cursor = strchr(cursor, ',') + 1;
+            cursor2 = strchr(cursor, ')');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing closing bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param4, cursor, cursor2 - cursor);
             cmpCleanUpToken(param4);
             // apply values
             if (cmpPathActionSetValue(&act, &value, true, param1) < 0)
@@ -2402,38 +2433,33 @@ int cmpParseACTION(char* line)
                 return -1;
             }
             cursor++;
-            strcpy(param1, cursor);
-            cursor2 = strchr(param1, '(');
+            cursor2 = strchr(cursor, '(');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing opening bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param1, cursor, cursor2 - cursor);
             cmpCleanUpToken(param1);
             // get the second branch param string
-            cursor = strchr(line, '(');
-            cursor++;
-            strcpy(param2, cursor);
-            cursor2 = strchr(param2, ',');
+            cursor = strchr(line, '(') + 1;
+            cursor2 = strchr(cursor, ',');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing comma, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param2, cursor, cursor2 - cursor);
             cmpCleanUpToken(param2);
             // get the third branch param string
-            cursor = strchr(line, ',');
-            cursor++;
-            strcpy(param3, cursor);
-            cursor2 = strchr(param3, ')');
+            cursor = strchr(line, ',') + 1;
+            cursor2 = strchr(cursor, ')');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing closing bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param3, cursor, cursor2 - cursor);
             cmpCleanUpToken(param3);
             // apply the values
             if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
@@ -2468,52 +2494,44 @@ int cmpParseACTION(char* line)
                 return -1;
             }
             cursor++;
-            strcpy(param1, cursor);
-            cursor2 = strchr(param1, '(');
+            cursor2 = strchr(cursor, '(');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing opening bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param1, cursor, cursor2 - cursor);
             cmpCleanUpToken(param1);
             // get fade 'tovol' param
-            cursor = strchr(line, '(');
-            cursor++;
-            strcpy(param2, cursor);
-            cursor2 = strchr(param2, ',');
+            cursor = strchr(line, '(') + 1;
+            cursor2 = strchr(cursor, ',');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing first comma, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param2, cursor, cursor2 - cursor);
             cmpCleanUpToken(param2);
             // get fade 'flip' param
-            cursor = strchr(line, ',');
-            cursor++;
-            strcpy(param3, cursor);
-            cursor2 = strchr(param3, ',');
+            cursor = strchr(line, ',') + 1;
+            cursor2 = strchr(cursor, ',');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing second comma, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param3, cursor, cursor2 - cursor);
             cmpCleanUpToken(param3);
             // get fade 'ms' param
-            cursor = strchr(line, ',');
-            cursor++;
-            cursor = strchr(cursor, ',');
-            cursor++;
-            strcpy(param4, cursor);
-            cursor2 = strchr(param4, ')');
+            cursor = strchr(line, ',') + 1;
+            cursor = strchr(cursor, ',') + 1;
+            cursor2 = strchr(cursor, ')');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing closing bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param4, cursor, cursor2 - cursor);
             cmpCleanUpToken(param4);
 
             // ASSUMING MS VALUE IS THE 'RIGHT' VALUE
@@ -2568,18 +2586,16 @@ int cmpParseACTION(char* line)
                 return -1;
             }
             cursor++;
-            strcpy(param1, cursor);
-            cursor2 = strchr(param1, '=');
+            cursor2 = strchr(line, '=');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing equals sign, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param1, cursor, cursor2 - cursor);
             cmpCleanUpToken(param1);
             // get the set right value
-            cursor = strchr(line, '=');
-            cursor++;
+            cursor = cursor2 + 1;
             strcpy(param2, cursor);
             cmpCleanUpToken(param2);
             // apply values
@@ -2609,11 +2625,18 @@ int cmpParseACTION(char* line)
             strcpy(param1, cursor);
             cmpCleanUpToken(param1);
             // apply the values
-            if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
+            //if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
+            //{
+            //    cout << "ERROR: can't set Event 'eventID' at line " << cmpCurLine << '\n';
+            //    return -1;
+            //}
+            if ((param1[0] != '0') && (param1[1] != 'x'))
             {
-                cout << "ERROR: can't set Event 'eventID' at line " << cmpCurLine << '\n';
+                cout << "ERROR: can't parse " << actnamestr << " action - expected a hexadecimal number parameter, at line " << cmpCurLine << '\n';
                 return -1;
             }
+            sscanf(param1 + 2, "%X", &value);
+
             act.act.event.eventid = value;
             break;
         case PATHACTION_CALLBACK:
@@ -2625,26 +2648,23 @@ int cmpParseACTION(char* line)
                 return -1;
             }
             cursor++;
-            strcpy(param1, cursor);
-            cursor2 = strchr(param1, '(');
+            cursor2 = strchr(cursor, '(');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing opening bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param1, cursor, cursor2 - cursor);
             cmpCleanUpToken(param1);
             // get callback id
-            cursor = strchr(line, '(');
-            cursor++;
-            strcpy(param2, cursor);
-            cursor2 = strchr(param2, ')');
+            cursor = strchr(line, '(') + 1;
+            cursor2 = strchr(cursor, ')');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing closing bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param2, cursor, cursor2 - cursor);
             cmpCleanUpToken(param2);
             // apply values
             if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
@@ -2670,23 +2690,19 @@ int cmpParseACTION(char* line)
                 return -1;
             }
             cursor++;
-            strcpy(param1, cursor);
-            cursor2 = cmpGetActionOperatorPos(param1);
+            cursor2 = cmpGetActionOperatorPos(cursor);
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing operator action, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param1, cursor, cursor2 - cursor);
             cmpCleanUpToken(param1);
             // get calc operator
-            cursor = cmpGetActionOperatorPos(line);
-            strcpy(param2, cursor);
+            strcpy(param2, cursor2);
             param2[1] = '\0';
             // get calc by
-            cursor = cmpGetActionOperatorPos(line);
-            cursor++;
-            strcpy(param3, cursor);
+            strcpy(param3, cursor2 + 1);
             cmpCleanUpToken(param3);
             // apply values
             if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
@@ -2713,26 +2729,23 @@ int cmpParseACTION(char* line)
                 return -1;
             }
             cursor++;
-            strcpy(param1, cursor);
-            cursor2 = strchr(param1, '(');
+            cursor2 = strchr(cursor, '(');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing opening bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param1, cursor, cursor2 - cursor);
             cmpCleanUpToken(param1);
             // get pause on
-            cursor = strchr(line, '(');
-            cursor++;
-            strcpy(param2, cursor);
-            cursor2 = strchr(param2, ')');
+            cursor = strchr(line, '(') + 1;
+            cursor2 = strchr(cursor, ')');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing closing bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param2, cursor, cursor2 - cursor);
             cmpCleanUpToken(param2);
             // apply values
             if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
@@ -2757,26 +2770,23 @@ int cmpParseACTION(char* line)
                 return -1;
             }
             cursor++;
-            strcpy(param1, cursor);
-            cursor2 = strchr(param1, '(');
+            cursor2 = strchr(cursor, '(');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing opening bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param1, cursor, cursor2 - cursor);
             cmpCleanUpToken(param1);
             // get LoadBank unload
-            cursor = strchr(line, '(');
-            cursor++;
-            strcpy(param2, cursor);
-            cursor2 = strchr(param2, ')');
+            cursor = strchr(line, '(') + 1;
+            cursor2 = strchr(cursor, ')');
             if (!cursor2)
             {
                 cout << "ERROR: can't parse " << actnamestr << " action - incorrect formatting, missing closing bracket, at line " << cmpCurLine << '\n';
                 return -1;
             }
-            *cursor2 = '\0';
+            strncpy(param2, cursor, cursor2 - cursor);
             cmpCleanUpToken(param2);
             // apply values
             if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
@@ -2834,7 +2844,7 @@ bool CompilerGetLine(FILE* f)
 
 int CompilerParseLine(char* line)
 {
-    char token[32];
+    char token[512];
     char* cursor = strchr(line, ' ');
     if (cursor)
         strcpy(token, cursor);
@@ -3111,14 +3121,14 @@ int MPFCompiler(char* txtfilename, char* mpffilename)
     FILE* f = fopen(txtfilename, "rb");
     if (!f)
     {
-        cout << "Can't open file [" << txtfilename << "] for reading:" << strerror(errno) << '\n';
+        cout << "Can't open file [" << txtfilename << "] for reading: " << strerror(errno) << '\n';
         return -1;
     }
 
     FILE* fout = fopen(mpffilename, "wb");
     if (!fout)
     {
-        cout << "Can't open file [" << mpffilename << "] for writing:" << strerror(errno) << '\n';
+        cout << "Can't open file [" << mpffilename << "] for writing: " << strerror(errno) << '\n';
         fclose(f);
         return -1;
     }
