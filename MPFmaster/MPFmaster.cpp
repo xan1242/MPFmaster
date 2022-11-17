@@ -74,6 +74,7 @@ enum cmpMainTokenType
     cmpPrereleaseRev,
     cmpGenerateID,
     cmpProjectID,
+    cmpNumSections,
     cmpMainTokenMAX
 };
 
@@ -91,6 +92,7 @@ const char* cmpMainTokenTypeStr[] =
     "Prerelease",
     "GenerateID",
     "ProjectID",
+    "NumSections",
 };
 
 enum cmpParsingStatus
@@ -262,7 +264,6 @@ vector<cmpROUTERType> cmpRouters;
 vector<cmpPATHTRACKINFO> cmpTrackInfos;
 vector<cmpPATHFINDNODE> cmpNodes;
 vector<cmpPATHEVENT> cmpEvents;
-uint32_t cmpNumSections = 0;
 
 char cmpReadLine[512];
 unsigned int cmpCurLine = 1;
@@ -538,6 +539,7 @@ int MPFtoTXT(char* mpffilename, char* txtfilename)
     fprintf(fout, "Prerelease %d\n", hdr.prerelease);
     fprintf(fout, "GenerateID %d\n", hdr.generateID);
     fprintf(fout, "ProjectID %d\n", hdr.projectID);
+    fprintf(fout, "NumSections %d\n", hdr.numsections);
 
     // Read named vars
     fseek(f, hdr.namedvars, SEEK_SET);
@@ -1786,9 +1788,6 @@ int cmpParseNODE(char* line)
                     break;
                 case cmpPNP_Section:
                     cmpNodes.back().node.sectionID = stoi(token);
-                    // save the largest section number for later
-                    if (cmpNumSections < (cmpNodes.back().node.sectionID + 1))
-                        cmpNumSections = cmpNodes.back().node.sectionID + 1;
                     break;
                 case cmpPNP_Part:
                     cmpNodes.back().node.partID = stoi(token);
@@ -2927,6 +2926,9 @@ int CompilerParseLine(char* line)
         case cmpProjectID:
             hdr.projectID = (uint8_t)stoi(token);
             break;
+        case cmpNumSections:
+            hdr.numsections = (uint8_t)stoi(token);
+            break;
         default:
             if (!isspace(*token) && (strlen(token) > 0))
             {
@@ -3168,8 +3170,9 @@ int MPFCompiler(char* txtfilename, char* mpffilename)
         hdr.release = 0xB0;
     if (hdr.prerelease == 0)
         hdr.prerelease = 1;
+    if (hdr.numsections == 0)
+        hdr.numsections = 1;
     hdr.numtracks = cmpTrackInfos.size();
-    hdr.numsections = cmpNumSections;
     hdr.numevents = cmpEvents.size();
     hdr.numrouters = cmpRouters.size();
     hdr.numnamedvars = cmpNamedVars.size();
