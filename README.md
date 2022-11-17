@@ -18,7 +18,7 @@ Some of the games are:
 
 - Need for Speed World
 
-- Red Alert 3 (sample extraction is broken because of separate MUS files)
+- Red Alert 3 (partial support)
 
 ## Usage
 
@@ -87,8 +87,6 @@ This tool isn't perfect. It doesn't generate quite identical files to the origin
 - Documentation about the syntax and available commands!
 
 - Test with other games!
-
-- Figure out sample extraction & repacking for Red Alert 3 -- maybe add a mode for separate files (or MPF updating only mode, no repacking)
 
 # Credits
 
