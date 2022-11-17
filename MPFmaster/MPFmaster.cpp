@@ -3397,8 +3397,8 @@ int main(int argc, char* argv[])
         }
 
         int si = stoi(argv[4]);
-        if (si < 0)
-            si = 0;
+        if (si <= 0)
+            si = 1;
 
         if (argc < 6)
             return MPF_ExtractSamples(argv[2], argv[3], NULL, si);
