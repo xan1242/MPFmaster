@@ -2625,17 +2625,24 @@ int cmpParseACTION(char* input_line)
             strcpy(param1, cursor);
             cmpCleanUpToken(param1);
             // apply the values
-            //if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
-            //{
-            //    cout << "ERROR: can't set Event 'eventID' at line " << cmpCurLine << '\n';
-            //    return -1;
-            //}
-            if ((param1[0] != '0') && (param1[1] != 'x'))
+            if (hdr.minorRev > 1)
             {
-                cout << "ERROR: can't parse " << actnamestr << " action - expected a hexadecimal number parameter, at line " << cmpCurLine << '\n';
-                return -1;
+                if (cmpPathActionSetValue(&act, &value, false, param1) < 0)
+                {
+                    cout << "ERROR: can't set Event 'eventID' at line " << cmpCurLine << '\n';
+                    return -1;
+                }
             }
-            sscanf(param1 + 2, "%X", &value);
+            else
+            {
+                if ((param1[0] != '0') && (param1[1] != 'x'))
+                {
+                    cout << "ERROR: can't parse " << actnamestr << " action - expected a hexadecimal number parameter, at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+
+                sscanf(param1 + 2, "%X", &value);
+            }
 
             act.act.event.eventid = value;
             break;
