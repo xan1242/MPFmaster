@@ -1544,6 +1544,10 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
         fwrite(&(sample), sizeof(PATHFINDSAMPLE), 1, f);
     }
 
+    // update the map file size
+    uint32_t mapsize = ftell(f);
+    fseek(f, 0x38, SEEK_SET);
+    fwrite(&mapsize, sizeof(uint32_t), 1, f);
 
     free(mpfdata);
     return 0;
