@@ -1462,7 +1462,16 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
                 hc++;
             }
         }
-    
+
+        if (bEALayer3Mode)
+        {
+            // get the aram size
+            trackinfos.at(t).maxaram = ftell(fmus);
+            // align by 0x10 bytes
+            if (trackinfos.at(t).maxaram % 0x10)
+                trackinfos.at(t).maxaram = trackinfos.at(t).maxaram - (trackinfos.at(t).maxaram % 0x10) + 0x10;
+        }
+
         for (int i = starting_sample; i < last_sample; i++)
         {
             // align by 0x80 bytes
@@ -1549,7 +1558,18 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
     fseek(f, 0x38, SEEK_SET);
     fwrite(&mapsize, sizeof(uint32_t), 1, f);
 
+    if (bEALayer3Mode)
+    {
+        // update aram sizes
+        for (int i = 0; i < trackinfoOffsets.size(); i++)
+        {
+            fseek(f, trackinfoOffsets.at(i), SEEK_SET);
+            fwrite(&(trackinfos.at(i)), sizeof(PATHTRACKINFO), 1, f);
+        }
+    }
+
     free(mpfdata);
+    fclose(f);
     return 0;
 }
 
