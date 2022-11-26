@@ -24,6 +24,7 @@
 #include <string>
 #include <algorithm>
 #include <stdlib.h>
+#include "crc24.h"
 #include "bswap.h"
 #include "PathFinderStructs.h"
 using namespace std;
@@ -277,6 +278,15 @@ vector<uint32_t> cmpRouterOffsets;
 vector<uint32_t> cmpTrackOffsets;
 
 // compiler stuff end
+
+// music add + concat stuff 
+
+int LastNodeIndex = 0;
+int LastPartIndex = 0;
+int LastWaveIndex = 0;
+// TODO: add more for concat - routers, branches, etc.
+
+// music add + concat stuff end
 
 // https://github.com/Medstar117/RA3MusEditor/blob/master/pathmusic.txt#L23
 struct MUSHeaderInfo
@@ -3354,6 +3364,194 @@ int MPFCompiler(char* txtfilename, char* mpffilename)
 
 // compiler stuff end
 
+// music add + concat stuff 
+
+int FindLastBits(const char* filename)
+{
+    FILE* f = fopen(filename, "rb");
+    if (!f)
+    {
+        cout << "Can't open file [" << filename << "] for reading: " << strerror(errno) << '\n';
+        return -1;
+    }
+
+
+    char param[32];
+    char* cursor;
+    int readNode = 0;
+    int readPart = 0;
+    int readWave = 0;
+
+    while (!feof(f))
+    {
+        if (CompilerGetLine(f))
+        {
+            string ln(cmpReadLine);
+            if (ln.find("Node") != string::npos)
+            {
+                cursor = strchr(cmpReadLine, ' ') + 1;
+                if (!cursor)
+                {
+                    cout << "ERROR: can't parse node - incorrect formatting, missing space after Node token word, at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                strcpy(param, cursor);
+                cmpCleanUpToken(param);
+                if (bStringHasAlpha(param))
+                {
+                    cout << "ERROR: unknown token, found non-numeric char in token (expected only integers): [" << param << "] at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                readNode = stoi(param);
+                if (readNode > LastNodeIndex)
+                    LastNodeIndex = readNode;
+            }
+            if (ln.find("Part") != string::npos)
+            {
+                cursor = strchr(cmpReadLine, ' ') + 1;
+                if (!cursor)
+                {
+                    cout << "ERROR: can't parse part - incorrect formatting, missing space after Part token word, at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                strcpy(param, cursor);
+                cmpCleanUpToken(param);
+                if (bStringHasAlpha(param))
+                {
+                    cout << "ERROR: unknown token, found non-numeric char in token (expected only integers): [" << param << "] at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                readPart = stoi(param);
+                if (readPart > LastPartIndex)
+                    LastPartIndex = readPart;
+            }
+            if (ln.find("Wave") != string::npos)
+            {
+                cursor = strchr(cmpReadLine, ' ') + 1;
+                if (!cursor)
+                {
+                    cout << "ERROR: can't parse wave - incorrect formatting, missing space after Wave token word, at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                strcpy(param, cursor);
+                cmpCleanUpToken(param);
+                if (bStringHasAlpha(param))
+                {
+                    cout << "ERROR: unknown token, found non-numeric char in token (expected only integers): [" << param << "] at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                readWave = stoi(param);
+                if (readWave > LastWaveIndex)
+                    LastWaveIndex = readWave;
+            }
+        }
+        cmpCurLine++;
+    }
+
+    fclose(f);
+    return 0;
+}
+
+int AppendSlot(const char* filename, bool bProStreetMode)
+{
+    FILE* f = fopen(filename, "ab");
+    if (!f)
+    {
+        cout << "Can't open file [" << filename << "] for updating: " << strerror(errno) << '\n';
+        return -1;
+    }
+
+    int AppendNodeIndex = LastNodeIndex + 1;
+    int AppendPartIndex = LastPartIndex + 1;
+    int AppendWaveIndex = LastWaveIndex + 1;
+    uint32_t AppendEventID = 0;
+    char AppendName[64];
+
+    // generate an eventID using crc24
+    sprintf(AppendName, "PATH_EVENT_Sample%d", AppendWaveIndex);
+    AppendEventID = crc_octets((unsigned char*)AppendName, strlen(AppendName));
+
+    cout << "Appending EventID: [0x" << std::uppercase << std::hex << AppendEventID << "], Sample: [" << std::dec << AppendWaveIndex << "]\n";
+
+    // write out info
+    fprintf(f, "\n# Appended slot\n# EventID: 0x%08X\n# Sample: %d\n", AppendEventID, AppendWaveIndex);
+    // the entrance node
+    fprintf(f, "Node %d\n", AppendNodeIndex);
+    fputs("{\n", f);
+    fputs("\tWave 0\n", f);
+    fputs("\tTrack 0\n", f);
+    fputs("\tSection 1\n", f);
+    fprintf(f, "\tPart %d\n", AppendPartIndex);
+    fputs("\tRouter -1\n", f);
+    fputs("\tController 0\n", f);
+    fputs("\tBeats 1\n", f);
+    fputs("\tBars 1\n", f);
+    fputs("\tSynchEvery 0\n", f);
+    fputs("\tSynchOffset 0\n", f);
+    fputs("\tNotes 0\n", f);
+    fputs("\tSynch 0\n", f);
+    fputs("\tChannelBranching 0\n", f);
+    fputs("\tBranches\n", f);
+    fputs("\t{\n", f);
+    fprintf(f, "\t\tControl 0,127 > %d\n", AppendNodeIndex + 2);
+    fputs("\t}\n", f);
+    fputs("}\n", f);
+    // the ending node
+    fprintf(f, "Node %d\n", AppendNodeIndex + 1);
+    fputs("{\n", f);
+    fputs("\tWave -1\n", f);
+    fputs("\tTrack 0\n", f);
+    fputs("\tSection 1\n", f);
+    fprintf(f, "\tPart %d\n", AppendPartIndex + 1);
+    fputs("\tRouter -1\n", f);
+    fputs("\tController 0\n", f);
+    fputs("\tBeats 1\n", f);
+    fputs("\tBars 1\n", f);
+    fputs("\tSynchEvery 0\n", f);
+    fputs("\tSynchOffset 0\n", f);
+    fputs("\tNotes 0\n", f);
+    fputs("\tSynch 0\n", f);
+    fputs("\tChannelBranching 0\n", f);
+    fputs("\tRepeat 0\n", f);
+    fputs("}\n", f);
+    // the main node
+    fprintf(f, "Node %d\n", AppendNodeIndex + 2);
+    fputs("{\n", f);
+    fprintf(f, "\tWave %d\n", AppendWaveIndex);
+    fputs("\tTrack 0\n", f);
+    fputs("\tSection 1\n", f);
+    fprintf(f, "\tPart %d\n", AppendPartIndex + 1);
+    fputs("\tRouter -1\n", f);
+    fputs("\tController 0\n", f);
+    fputs("\tBeats 4\n", f);
+    fputs("\tBars 1\n", f);
+    fputs("\tSynchEvery 0\n", f);
+    fputs("\tSynchOffset 0\n", f);
+    fputs("\tNotes 4\n", f);
+    fputs("\tSynch 0\n", f);
+    fputs("\tChannelBranching 0\n", f);
+    fputs("\tBranches\n", f);
+    fputs("\t{\n", f);
+    fprintf(f, "\t\tControl 0,127 > %d\n", AppendNodeIndex + 1);
+    fputs("\t}\n", f);
+    fputs("}\n", f);
+    // event ID
+    fprintf(f, "Event 0x%08X\n", AppendEventID);
+    fputs("{\n", f);
+    fputs("\tActions\n", f);
+    fputs("\t{\n", f);
+    fputs("(0, 0)\t\tBranch -1 (-1, -1)\n", f);
+    if (bProStreetMode)
+        fputs("(0, 0)\t\tSet CONTROLLER = 120\n", f);
+    fprintf(f, "(0, 0)\t\tBranch %d (-1, 0)\n", AppendNodeIndex);
+    fputs("\t}\n", f);
+    fputs("}\n", f);
+    fclose(f);
+    return 0;
+}
+
+// music add + concat stuff end
+
 int main(int argc, char* argv[])
 {
     cout << "EA Pathfinder v5 MPF tool\n";
@@ -3362,10 +3560,12 @@ int main(int argc, char* argv[])
     {
         cout \
             << "USAGE (decompile MPF to TXT): " << argv[0] << " MPFfile [OutFile]\n" \
-            << "USAGE (compile TXT to MPF): " << argv[0] << " -c source [MPFout]\n"\
+            << "USAGE (compile TXT to MPF): " << argv[0] << " -c sourceMapFile [MPFout]\n"\
             << "USAGE (extract by sample num): " << argv[0] << " -s MPFfile MusTrackFile SampleNumber [OutSampleFile]\n"\
             << "USAGE (extract all samples): " << argv[0] << " -sa MPFfile MusTrackFile [OutSampleFolder]\n"\
             << "USAGE (update samples): " << argv[0] << " -su MPFfile SampleFolder\n"\
+            << "USAGE (append a new slot): " << argv[0] << " -a sourceMapFile\n"\
+            << "USAGE (append a new slot (NFS Pro Street)): " << argv[0] << " -ap sourceMapFile\n"\
             << "\n"\
             << "For sample updating, the MUS file will be generated with the name of the MPF and placed next to it. You MUST have all files from the lowest to highest number!\n"\
             << "If you omit the optional [out] name, it'll inherit the name of the input file.\n"\
@@ -3449,6 +3649,30 @@ int main(int argc, char* argv[])
             return MPF_ExtractSamples(argv[2], argv[3], NULL, si);
         else
             return MPF_ExtractSamples(argv[2], argv[3], argv[argc - 1], si);
+    }
+    // appending mode
+    if ((argv[1][0] == '-') && argv[1][1] == 'a')
+    {
+        if (argc < 3)
+        {
+            cout << "ERROR: not enough arguments for appending!\n"\
+                << "USAGE (append a new slot): " << argv[0] << " -a[p] sourceMapFile\n";
+            return -1;
+        }
+
+
+        if (FindLastBits(argv[2]) < 0)
+        {
+            cout << "ERROR: Can't parse file during finding indicies for appending!\n";
+            return -1;
+        }
+
+        if (AppendSlot(argv[2], (argv[1][2] == 'p')) < 0)
+        {
+            cout << "ERROR: Can't append the slot!\n";
+            return -1;
+        }
+        return 0;
     }
 
     if (argc < 3)

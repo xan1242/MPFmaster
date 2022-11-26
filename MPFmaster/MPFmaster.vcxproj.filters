@@ -26,5 +26,8 @@
     <ClInclude Include="bswap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="crc24.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
