@@ -1313,7 +1313,7 @@ uint32_t GetSampleMSLength_GSTR(void* in)
 
     //long long unsigned int msLength = (num_samples * 1000) / sample_rate;
     double msLength = (double)num_samples / (double)sample_rate;
-    msLength *= 1000;
+    msLength *= 1000.0;
     return (uint32_t)msLength;
 }
 
