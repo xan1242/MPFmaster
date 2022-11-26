@@ -1311,8 +1311,10 @@ uint32_t GetSampleMSLength_GSTR(void* in)
     if ((num_samples == 0) || sample_rate == 0)
         return 0;
 
-    long long unsigned int msLength = (num_samples * 1000) / sample_rate;
-    return msLength;
+    //long long unsigned int msLength = (num_samples * 1000) / sample_rate;
+    double msLength = (double)num_samples / (double)sample_rate;
+    msLength *= 1000;
+    return (uint32_t)msLength;
 }
 
 int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
