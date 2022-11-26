@@ -26,18 +26,18 @@ Basic usage:
 
 ```
 USAGE (decompile MPF to TXT): mpfmaster MPFfile [OutFile]
-USAGE (compile TXT to MPF): mpfmaster -c source [MPFout]
+USAGE (compile TXT to MPF): mpfmaster -c sourceMapFile [MPFout]
 USAGE (extract by sample num): mpfmaster -s MPFfile MusTrackFile SampleNumber [OutSampleFile]
 USAGE (extract all samples): mpfmaster -sa MPFfile MusTrackFile [OutSampleFolder]
 USAGE (update samples): mpfmaster -su MPFfile SampleFolder
+USAGE (append a new slot): mpfmaster -a sourceMapFile
+USAGE (append a new slot (NFS Pro Street)): mpfmaster -ap sourceMapFile
 
 For sample updating, the MUS file will be generated with the name of the MPF and placed next to it. You MUST have all files from the lowest to highest number!
 If you omit the optional [out] name, it'll inherit the name of the input file.
 The compiler is not very well written, so please follow the decompilation syntax closely!
-Newly compiled files do not contain samples. Add them with the update samples command.
+Newly compiled files do not contain samples. Add them with the update samples command.Example: you want to edit something in the existing track files...
 ```
-
-Example: you want to edit something in the existing track files...
 
 - Make sure your MPF and MUS files are in the same folder!
 
