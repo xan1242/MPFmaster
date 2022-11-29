@@ -10,6 +10,8 @@ You can use this tool to preview what each node will sound like without having t
 
 ## Usage
 
+Before anything, install .NET Desktop Runtime. Release builds are built with version 6.0, so get that one.
+
 1. Open the Pathfinder map file source (decompiled with MPFmaster)
 
 2. Open a folder with samples in a supported format by BASS (WAV, MP3, OGG) - convert your samples if you have to
