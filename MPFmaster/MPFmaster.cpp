@@ -284,7 +284,10 @@ vector<uint32_t> cmpTrackOffsets;
 int LastNodeIndex = 0;
 int LastPartIndex = 0;
 int LastWaveIndex = 0;
-// TODO: add more for concat - routers, branches, etc.
+int LastRouterIndex = 0;
+int LastSectionIndex = 0;
+char catOutLine[512];
+char catReadLine[512];
 
 // music add + concat stuff end
 
@@ -3384,6 +3387,9 @@ int FindLastBits(const char* filename)
     int readNode = 0;
     int readPart = 0;
     int readWave = 0;
+    int readRouter = 0;
+    int readSection = 0;
+
 
     while (!feof(f))
     {
@@ -3409,6 +3415,25 @@ int FindLastBits(const char* filename)
                 if (readNode > LastNodeIndex)
                     LastNodeIndex = readNode;
             }
+            if (ln.find("Router") != string::npos)
+            {
+                cursor = strchr(cmpReadLine, ' ') + 1;
+                if (!cursor)
+                {
+                    cout << "ERROR: can't parse router - incorrect formatting, missing space after router token word, at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                strcpy(param, cursor);
+                cmpCleanUpToken(param);
+                if (bStringHasAlpha(param))
+                {
+                    cout << "ERROR: unknown token, found non-numeric char in token (expected only integers): [" << param << "] at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                readRouter = stoi(param);
+                if (readRouter > LastRouterIndex)
+                    LastRouterIndex = readRouter;
+            }
             if (ln.find("Part") != string::npos)
             {
                 cursor = strchr(cmpReadLine, ' ') + 1;
@@ -3427,6 +3452,25 @@ int FindLastBits(const char* filename)
                 readPart = stoi(param);
                 if (readPart > LastPartIndex)
                     LastPartIndex = readPart;
+            }
+            if (ln.find("Section") != string::npos)
+            {
+                cursor = strchr(cmpReadLine, ' ') + 1;
+                if (!cursor)
+                {
+                    cout << "ERROR: can't parse section - incorrect formatting, missing space after Section token word, at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                strcpy(param, cursor);
+                cmpCleanUpToken(param);
+                if (bStringHasAlpha(param))
+                {
+                    cout << "ERROR: unknown token, found non-numeric char in token (expected only integers): [" << param << "] at line " << cmpCurLine << '\n';
+                    return -1;
+                }
+                readSection = stoi(param);
+                if (readSection > LastSectionIndex)
+                    LastSectionIndex = readSection;
             }
             if (ln.find("Wave") != string::npos)
             {
@@ -3553,6 +3597,250 @@ int AppendSlot(const char* filename, bool bProStreetMode)
     return 0;
 }
 
+int ConcatMaps(const char* dstfile, const char* srcfile)
+{
+    int AppendNodeIndex = LastNodeIndex + 1;
+    int AppendPartIndex = LastPartIndex + 1;
+    int AppendWaveIndex = LastWaveIndex + 1;
+    int AppendRouterIndex = LastRouterIndex + 1;
+    int AppendSectionIndex = LastSectionIndex + 1;
+
+    int readIdx = 0;
+
+    int param1 = 0;
+    int param2 = 0;
+
+    char* cursor;
+    char* cursor2;
+
+    FILE* f = fopen(srcfile, "rb");
+    if (!f)
+    {
+        cout << "Can't open file [" << srcfile << "] for reading: " << strerror(errno) << '\n';
+        return -1;
+    }
+
+    FILE* fdst = fopen(dstfile, "ab");
+    if (!fdst)
+    {
+        cout << "Can't open file [" << dstfile << "] for appending: " << strerror(errno) << '\n';
+        return -1;
+    }
+
+    fprintDividerLine(fdst, '#', '-', 0, 72);
+    fprintf(fdst, "# File: %s\n", srcfile);
+    fprintDividerLine(fdst, '#', '-', 0, 72);
+
+    while (!feof(f))
+    {
+        fgets(cmpReadLine, 512, f);
+        string ln(cmpReadLine);
+        strcpy(catReadLine, cmpReadLine);
+        
+        // skip version info
+        if (!((ln.find("Major ") != string::npos) || 
+            (ln.find("Minor ") != string::npos) || 
+            (ln.find("Release ") != string::npos) || 
+            (ln.find("Prerelease ") != string::npos) || 
+            (ln.find("GenerateID ") != string::npos) || 
+            (ln.find("ProjectID ") != string::npos)))
+        {
+            // skip track info
+            if (ln.find("Track ") != string::npos)
+            {
+                fgets(catReadLine, 512, f);
+                string ln2(catReadLine);
+                if (ln2.find("{") != string::npos)
+                {
+                    int gotc = 0;
+                    do
+                    {
+                        gotc = fgetc(f);
+                    } while (gotc != '}');
+                    fseek(f, 1, SEEK_CUR);
+                    strcpy(catOutLine, "");
+                }
+                else
+                    strcpy(catOutLine, cmpReadLine);
+            }
+            else if (ln.find("Router ") != string::npos)
+            {
+                // check if indented
+                bool bIndented = false;
+
+                if (catReadLine[0] == '\t')
+                    bIndented = true;
+
+                cmpCleanUpToken(catReadLine);
+                cursor = strchr(catReadLine, ' ') + 1;
+                readIdx = stoi(cursor);
+                if (readIdx > 0)
+                    if (bIndented)
+                        sprintf(catOutLine, "\tRouter %d\n", readIdx + AppendRouterIndex);
+                    else
+                        sprintf(catOutLine, "Router %d\n", readIdx + AppendRouterIndex);
+                else
+                    if (bIndented)
+                        sprintf(catOutLine, "\tRouter %d\n", readIdx);
+                    else
+                        sprintf(catOutLine, "Router %d\n", readIdx);
+            }
+            else if (ln.find(" > ") != string::npos)
+            {
+                // detect whether it's a router or a control branch
+                if (!(ln.find("Control ") != string::npos))
+                {
+                    cmpCleanUpToken(catReadLine);
+                    cursor = strchr(catReadLine, '>');
+                    *cursor = 0;
+                    cmpCleanUpToken(catReadLine);
+                    cursor++;
+                    while (*cursor == ' ')
+                        cursor++;
+                    param1 = stoi(catReadLine);
+                    param2 = stoi(cursor);
+
+                    if (param2 > 65535)
+                        param2 = 65535;
+
+                    sprintf(catOutLine, "\t%d > %d\n", param1 + AppendNodeIndex, param2 + AppendNodeIndex);
+                }
+                else
+                {
+                    cmpCleanUpToken(catReadLine);
+                    cursor = strchr(catReadLine, '>');
+                    *cursor = 0;
+                    cmpCleanUpToken(catReadLine);
+                    cursor++;
+                    while (*cursor == ' ')
+                        cursor++;
+                    param1 = stoi(cursor);
+                    sprintf(catOutLine, "\t\t%s > %d\n", catReadLine, param1 + AppendNodeIndex);
+                }
+            }
+            else if (ln.find("Node ") != string::npos)
+            {
+                cmpCleanUpToken(catReadLine);
+                cursor = strchr(catReadLine, ' ') + 1;
+                readIdx = stoi(cursor);
+                sprintf(catOutLine, "Node %d\n", readIdx + AppendNodeIndex);
+            }
+            else if (ln.find("Wave ") != string::npos)
+            {
+                cmpCleanUpToken(catReadLine);
+                cursor = strchr(catReadLine, ' ') + 1;
+                readIdx = stoi(cursor);
+                if (readIdx > 0)
+                    sprintf(catOutLine, "\tWave %d\n", readIdx + AppendWaveIndex);
+                else
+                    sprintf(catOutLine, "\tWave %d\n", readIdx);
+            }
+            else if (ln.find("Part ") != string::npos)
+            {
+                cmpCleanUpToken(catReadLine);
+                cursor = strchr(catReadLine, ' ') + 1;
+                readIdx = stoi(cursor);
+                if (readIdx >= 0)
+                    sprintf(catOutLine, "\tPart %d\n", readIdx + AppendPartIndex);
+                else
+                    sprintf(catOutLine, "\tPart %d\n", readIdx);
+            }
+            else if (ln.find("Section ") != string::npos)
+            {
+                cmpCleanUpToken(catReadLine);
+                cursor = strchr(catReadLine, ' ') + 1;
+                readIdx = stoi(cursor);
+                if (readIdx >= 0)
+                    sprintf(catOutLine, "\tSection %d\n", readIdx + AppendSectionIndex);
+                else
+                    sprintf(catOutLine, "\tSection %d\n", readIdx);
+            }
+            else if (ln.find("Branch ") != string::npos)
+            {
+                cursor = strchr(catReadLine, '\t');
+                cursor = strchr(cursor, ' ');
+                *cursor = 0;
+                cursor++;
+                cursor2 = strchr(cursor, ' ');
+                *cursor2 = 0;
+                cursor2++;
+
+                if (bStringHasAlpha(cursor))
+                    strcpy(catOutLine, cmpReadLine);
+                else
+                {
+                    param1 = stoi(cursor);
+                    if (param1 >= 0)
+                        sprintf(catOutLine, "%s %d %s", catReadLine, param1 + AppendNodeIndex, cursor2);
+                    else
+                        strcpy(catOutLine, cmpReadLine);
+                }
+            }
+            else if ((ln.find("If CURRENTNODE") != string::npos) || (ln.find("Elif CURRENTNODE") != string::npos))
+            {
+                cursor = strrchr(catReadLine, ' ');
+                *cursor = 0;
+                cursor++;
+                cmpCleanUpToken(cursor);
+                if (bStringHasAlpha(cursor))
+                    strcpy(catOutLine, cmpReadLine);
+                else
+                {
+                    param1 = stoi(cursor);
+                    if (param1 >= 0)
+                        sprintf(catOutLine, "%s %d\n", catReadLine, param1 + AppendNodeIndex);
+                    else
+                        strcpy(catOutLine, cmpReadLine);
+                }
+            }
+            else if ((ln.find("If CURRENTPART") != string::npos) || (ln.find("Elif CURRENTPART") != string::npos))
+            {
+                cursor = strrchr(catReadLine, ' ');
+                *cursor = 0;
+                cursor++;
+                cmpCleanUpToken(cursor);
+                if (bStringHasAlpha(cursor))
+                    strcpy(catOutLine, cmpReadLine);
+                else
+                {
+                    param1 = stoi(cursor);
+                    if (param1 >= 0)
+                        sprintf(catOutLine, "%s %d\n", catReadLine, param1 + AppendPartIndex);
+                    else
+                        strcpy(catOutLine, cmpReadLine);
+                }
+            }
+            else if ((ln.find("If CURRENTSECTION") != string::npos) || (ln.find("Elif CURRENTSECTION") != string::npos))
+            {
+                cursor = strrchr(catReadLine, ' ');
+                *cursor = 0;
+                cursor++;
+                cmpCleanUpToken(cursor);
+                if (bStringHasAlpha(cursor))
+                    strcpy(catOutLine, cmpReadLine);
+                else
+                {
+                    param1 = stoi(cursor);
+                    if (param1 >= 0)
+                        sprintf(catOutLine, "%s %d\n", catReadLine, param1 + AppendSectionIndex);
+                    else
+                        strcpy(catOutLine, cmpReadLine);
+                }
+            }
+            else
+                strcpy(catOutLine, cmpReadLine);
+
+            fputs(catOutLine, fdst);
+            fflush(fdst);
+        }
+
+    }
+
+    fclose(fdst);
+    fclose(f);
+    return 0;
+}
+
 // music add + concat stuff end
 
 int main(int argc, char* argv[])
@@ -3569,6 +3857,7 @@ int main(int argc, char* argv[])
             << "USAGE (update samples): " << argv[0] << " -su MPFfile SampleFolder\n"\
             << "USAGE (append a new slot): " << argv[0] << " -a sourceMapFile\n"\
             << "USAGE (append a new slot (NFS Pro Street)): " << argv[0] << " -ap sourceMapFile\n"\
+            << "USAGE (concat files): " << argv[0] << " -t destinationMapFile sourceMapFile\n"\
             << "\n"\
             << "For sample updating, the MUS file will be generated with the name of the MPF and placed next to it. You MUST have all files from the lowest to highest number!\n"\
             << "If you omit the optional [out] name, it'll inherit the name of the input file.\n"\
@@ -3673,6 +3962,31 @@ int main(int argc, char* argv[])
         if (AppendSlot(argv[2], (argv[1][2] == 'p')) < 0)
         {
             cout << "ERROR: Can't append the slot!\n";
+            return -1;
+        }
+        return 0;
+    }
+
+    // concat mode
+    if ((argv[1][0] == '-') && argv[1][1] == 't')
+    {
+        if (argc < 4)
+        {
+            cout << "ERROR: not enough arguments for concat!\n"\
+                << "USAGE (concat files): " << argv[0] << " -t destinationMapFile sourceMapFile\n";
+            return -1;
+        }
+
+
+        if (FindLastBits(argv[2]) < 0)
+        {
+            cout << "ERROR: Can't parse file during finding indicies for concating!\n";
+            return -1;
+        }
+
+        if (ConcatMaps(argv[2], argv[3]) < 0)
+        {
+            cout << "ERROR: Can't concat!\n";
             return -1;
         }
         return 0;
