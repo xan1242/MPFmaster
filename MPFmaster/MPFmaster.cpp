@@ -288,6 +288,8 @@ int LastRouterIndex = 0;
 int LastSectionIndex = 0;
 char catOutLine[512];
 char catReadLine[512];
+char catOldFilename[512];
+char catNewFilename[512];
 
 // music add + concat stuff end
 
@@ -3842,6 +3844,88 @@ int ConcatMaps(const char* dstfile, const char* srcfile)
     return 0;
 }
 
+int ShiftSampleNamesInFolder(const char* foldername, int by)
+{
+    GetDirectoryListing(foldername);
+
+    unsigned int MinSampNumber = 0xFFFFFFFF;
+    unsigned int MaxSampNumber = 0;
+
+    int ReadNumber = 0;
+
+    char* cursor;
+
+    for (int i = 0; i < FileDirectoryListing.size(); i++)
+    {
+        strcpy(catReadLine, FileDirectoryListing.at(i).c_str());
+        cursor = strchr(catReadLine, '.');
+        *cursor = 0;
+        ReadNumber = stoi(catReadLine);
+
+        if (ReadNumber < MinSampNumber)
+            MinSampNumber = ReadNumber;
+
+        if (ReadNumber > MaxSampNumber)
+            MaxSampNumber = ReadNumber;
+    }
+
+    // if we're incrementing the names, go in reverse order to avoid collisions
+    if (by > 0)
+    {
+        for (int i = MaxSampNumber; i >= MinSampNumber; i--)
+        {
+            if (bEALayer3Mode)
+            {
+                sprintf(catOldFilename, "%s%s%d.snr", foldername, path_separator, i);
+                sprintf(catNewFilename, "%s%s%d.snr", foldername, path_separator, i + by);
+            }
+            else
+            {
+                sprintf(catOldFilename, "%s%s%d.asf", foldername, path_separator, i);
+                sprintf(catNewFilename, "%s%s%d.asf", foldername, path_separator, i + by);
+            }
+            
+            cout << "Renaming: " << catOldFilename << " >> " << catNewFilename << '\n';
+            rename(catOldFilename, catNewFilename);
+
+
+            if (bEALayer3Mode)
+            {
+                sprintf(catOldFilename, "%s%s%d.sns", foldername, path_separator, i);
+                sprintf(catNewFilename, "%s%s%d.sns", foldername, path_separator, i + by);
+                cout << "Renaming: " << catOldFilename << " >> " << catNewFilename << '\n';
+                rename(catOldFilename, catNewFilename);
+            }
+        }
+    }
+    if (by < 0)
+    {
+        for (int i = MinSampNumber; i <= MaxSampNumber; i++)
+        {
+            if (bEALayer3Mode)
+            {
+                sprintf(catOldFilename, "%s%s%d.snr", foldername, path_separator, i);
+                sprintf(catNewFilename, "%s%s%d.snr", foldername, path_separator, i + by);
+            }
+            else
+            {
+                sprintf(catOldFilename, "%s%s%d.asf", foldername, path_separator, i);
+                sprintf(catNewFilename, "%s%s%d.asf", foldername, path_separator, i + by);
+            }
+
+            rename(catOldFilename, catNewFilename);
+
+            if (bEALayer3Mode)
+            {
+                sprintf(catOldFilename, "%s%s%d.sns", foldername, path_separator, i);
+                sprintf(catNewFilename, "%s%s%d.sns", foldername, path_separator, i + by);
+                rename(catOldFilename, catNewFilename);
+            }
+        }
+    }
+
+}
+
 // music add + concat stuff end
 
 int main(int argc, char* argv[])
@@ -3856,6 +3940,7 @@ int main(int argc, char* argv[])
             << "USAGE (extract by sample num): " << argv[0] << " -s MPFfile MusTrackFile SampleNumber [OutSampleFile]\n"\
             << "USAGE (extract all samples): " << argv[0] << " -sa MPFfile MusTrackFile [OutSampleFolder]\n"\
             << "USAGE (update samples): " << argv[0] << " -su MPFfile SampleFolder\n"\
+            << "USAGE (shift sample names): " << argv[0] << " -ss SampleFolder shiftAmount\n"\
             << "USAGE (append a new slot): " << argv[0] << " -a sourceMapFile\n"\
             << "USAGE (append a new slot (NFS Pro Street)): " << argv[0] << " -ap sourceMapFile\n"\
             << "USAGE (concat files): " << argv[0] << " -t destinationMapFile sourceMapFile\n"\
@@ -3924,6 +4009,18 @@ int main(int argc, char* argv[])
             cout << "Updating samples in: " << argv[argc - 1] << '\n';
 
             return MPF_UpdateSamples(argv[2], argv[argc - 1]);
+        }
+
+        // shift sample indicies
+        if (argv[1][2] == 's')
+        {
+            if (argc < 4)
+            {
+                cout << "ERROR: not enough arguments for shifting!\n"\
+                    << "USAGE (shift sample names): " << argv[0] << " -ss SampleFolder shiftAmount\n";
+                return -1;
+            }
+            return ShiftSampleNamesInFolder(argv[2], stoi(argv[3]));
         }
 
         // sample by index
