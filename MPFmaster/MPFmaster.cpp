@@ -3923,7 +3923,7 @@ int ShiftSampleNamesInFolder(const char* foldername, int by)
             }
         }
     }
-
+    return 0;
 }
 
 // music add + concat stuff end
