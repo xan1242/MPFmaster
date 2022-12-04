@@ -3643,7 +3643,8 @@ int ConcatMaps(const char* dstfile, const char* srcfile)
             (ln.find("Release ") != string::npos) || 
             (ln.find("Prerelease ") != string::npos) || 
             (ln.find("GenerateID ") != string::npos) || 
-            (ln.find("ProjectID ") != string::npos)))
+            (ln.find("ProjectID ") != string::npos)) ||
+            (ln.find("NumSections ") != string::npos))
         {
             // skip track info
             if (ln.find("Track ") != string::npos)
