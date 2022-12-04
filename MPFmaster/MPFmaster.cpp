@@ -3601,7 +3601,7 @@ int ConcatMaps(const char* dstfile, const char* srcfile)
 {
     int AppendNodeIndex = LastNodeIndex + 1;
     int AppendPartIndex = LastPartIndex + 1;
-    int AppendWaveIndex = LastWaveIndex + 1;
+    int AppendWaveIndex = LastWaveIndex;
     int AppendRouterIndex = LastRouterIndex + 1;
     int AppendSectionIndex = LastSectionIndex + 1;
 
