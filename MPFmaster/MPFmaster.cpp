@@ -3645,12 +3645,13 @@ int ConcatMaps(const char* dstfile, const char* srcfile)
             (ln.find("Release ") != string::npos) || 
             (ln.find("Prerelease ") != string::npos) || 
             (ln.find("GenerateID ") != string::npos) || 
-            (ln.find("ProjectID ") != string::npos)) ||
-            (ln.find("NumSections ") != string::npos))
+            (ln.find("ProjectID ") != string::npos) ||
+            (ln.find("NumSections ") != string::npos)))
         {
             // skip track info
             if (ln.find("Track ") != string::npos)
             {
+                size_t oldpos = ftell(f);
                 fgets(catReadLine, 512, f);
                 string ln2(catReadLine);
                 if (ln2.find("{") != string::npos)
@@ -3664,7 +3665,10 @@ int ConcatMaps(const char* dstfile, const char* srcfile)
                     strcpy(catOutLine, "");
                 }
                 else
+                {
+                    fseek(f, oldpos, SEEK_SET);
                     strcpy(catOutLine, cmpReadLine);
+                }
             }
             else if (ln.find("Router ") != string::npos)
             {
