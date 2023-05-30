@@ -31,8 +31,8 @@ USAGE (extract by sample num): mpfmaster -s MPFfile MusTrackFile SampleNumber [O
 USAGE (extract all samples): mpfmaster -sa MPFfile MusTrackFile [OutSampleFolder]
 USAGE (update samples): mpfmaster -su MPFfile SampleFolder
 USAGE (shift sample names): mpfmaster -ss SampleFolder shiftAmount
-USAGE (append a new slot): mpfmaster -a sourceMapFile
-USAGE (append a new slot (NFS Pro Street)): mpfmaster -ap sourceMapFile
+USAGE (append a new slot): mpfmaster -a sourceMapFile [TrackID] [SectionID]
+USAGE (append a new slot (NFS Pro Street)): mpfmaster -ap sourceMapFile [TrackID] [SectionID]
 USAGE (concat files): mpfmaster -t destinationMapFile sourceMapFile
 
 For sample updating, the MUS file will be generated with the name of the MPF and placed next to it. You MUST have all files from the lowest to highest number!
@@ -77,7 +77,7 @@ This tool isn't perfect. It doesn't generate quite identical files to the origin
 
 - Big endian support for consoles
 
-- Try out compiling with gcc/clang -- currently works in macOS, still need make a CMakeLists
+- Try out compiling with gcc/clang -- currently works in macOS, still need to make a CMakeLists
 
 - Figure out why some variable types don't get updates for certain actions (mostly fixed)
 

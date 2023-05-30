@@ -41,6 +41,7 @@ vector<uint32_t> eventOffsets;
 vector<uint32_t> routerOffsets;
 vector<uint32_t> trackinfoOffsets;
 vector<uint32_t> sampleOffsets;
+vector<uint32_t> sampleSizes;
 vector<uint32_t> sampleLengths;
 vector<PATHTRACKINFO> trackinfos;
 
@@ -739,12 +740,12 @@ int MPFtoTXT(char* mpffilename, char* txtfilename)
                 PATHACT* act = &(action.act);
                 fread(&action, sizeof(PATHACTION), 1, f);
 
-                int8_t track = action.track & 0xFF;
-                if (track > 0)
-                    track--;
+                //int8_t track = action.track & 0xFF;
+                //if (track > 0)
+                //    track--;
                 auto sectionID = action.sectionID;
 
-                fprintf(fout, "(%d, %d)", track, sectionID);
+                fprintf(fout, "(0x%X, %d)", action.track, sectionID);
 
                 if ((action.type == PATHACTION_CONDITION) && (action.assess > PATHASSESS_IF))
                     indent -= 1;
@@ -973,14 +974,9 @@ int MPF_ExtractSamples(char* mpffilename, char* mustrackfilename, char* outparam
         {
             uint32_t size = 0;
             uint32_t magic = 0;
-            if (i == last_sample - 1)
-                size = st.st_size - sampleOffsets.at(i);
-            else
-                size = sampleOffsets.at(i + 1) - sampleOffsets.at(i);
 
             // get file extension
             fread(&magic, sizeof(uint32_t), 1, fmus);
-            fseek(fmus, sampleOffsets[i], SEEK_SET);
             SampleFileType ftype = GetSampleFileType(magic);
             const char* file_ext = SampleFileTypeStr[ftype];
 
@@ -988,6 +984,33 @@ int MPF_ExtractSamples(char* mpffilename, char* mustrackfilename, char* outparam
             {
                 cout << "Going into EALayer3 mode!\n";
                 bEALayer3Mode = true;
+
+                // get sample sizes from the header instead
+                uint32_t hdrcount = 0;
+                MUSHeaderInfo hi = { 0 };
+                fseek(fmus, 4, SEEK_SET);
+                fread(&hdrcount, sizeof(uint32_t), 1, fmus);
+                fseek(fmus, 0x28, SEEK_SET);
+
+                for (int j = 0; j < hdrcount; j++)
+                {
+                    fread(&hi, sizeof(MUSHeaderInfo), 1, fmus);
+                    sampleSizes.push_back(hi.DataSize);
+                }
+            }
+
+            fseek(fmus, sampleOffsets[i], SEEK_SET);
+
+            if (bEALayer3Mode)
+            {
+                size = sampleSizes.at(i);
+            }
+            else
+            {
+                if (i == last_sample - 1)
+                    size = st.st_size - sampleOffsets.at(i);
+                else
+                    size = sampleOffsets.at(i + 1) - sampleOffsets.at(i);
             }
 
             // open the new file
@@ -1425,8 +1448,9 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
             fwrite(&sample_count, sizeof(uint32_t), 1, fmus);
             fseek(fmus, 0x28, SEEK_SET);
     
-            size_t headers_size = sizeof(MUSHeaderInfo) * sample_count;
-            fseek(fmus, 0x28 + headers_size, SEEK_SET);
+            size_t headers_size = sizeof(MUSHeaderInfo) * sample_count + 0x28;
+            headers_size = (headers_size + 0x100) - (headers_size % 0x100);
+            fseek(fmus, headers_size, SEEK_SET);
     
             for (int i = starting_sample; i < last_sample; i++)
             {
@@ -1495,7 +1519,7 @@ int MPF_UpdateSamples(char* mpffilename, char* samplefolder)
             // align by 0x80 bytes
             size_t mus_offset = ftell(fmus);
             if (mus_offset % 0x80)
-                mus_offset = mus_offset - (mus_offset % 0x80) + 0x80;
+                mus_offset = (mus_offset + 0x80) - (mus_offset % 0x80);
             fseek(fmus, mus_offset, SEEK_SET);
     
             sampleOffsets.push_back(mus_offset / 0x80);
@@ -2293,12 +2317,23 @@ int cmpParseACTION(char* input_line)
         }
         strncpy(param2, cursor, cursor2 - cursor);
         cmpCleanUpToken(param2);
+        
+        std::string hexCheckStr = param1;
+        if ((param1[1] == 'x') || (param1[1] == 'X'))
+            hexCheckStr = param1 + 2;
+
+        if (!all_of(hexCheckStr.begin(), hexCheckStr.end(), ::isxdigit))
+        {
+            cout << "ERROR: can't parse " << actnamestr << " action - track ID not in hexadecimal format, at line " << cmpCurLine << '\n';
+            return -1;
+        }
+
         // apply the values
 
-        act.track = stoi(param1);
+        act.track = stoi(param1, nullptr, 16);
         act.sectionID = stoi(param2);
 
-        if (act.track >= 0)
+        if (act.track == 0)
         {
             act.track++;
             act.track |= 0x11000000; // TODO - figure this out fully
@@ -3501,7 +3536,7 @@ int FindLastBits(const char* filename)
     return 0;
 }
 
-int AppendSlot(const char* filename, bool bProStreetMode)
+int AppendSlot(const char* filename, bool bProStreetMode, uint32_t TrackID = 0x11000001, uint32_t SectionID = 0)
 {
     FILE* f = fopen(filename, "ab");
     if (!f)
@@ -3589,10 +3624,10 @@ int AppendSlot(const char* filename, bool bProStreetMode)
     fputs("{\n", f);
     fputs("\tActions\n", f);
     fputs("\t{\n", f);
-    fputs("(0, 0)\t\tBranch -1 (-1, -1)\n", f);
+    fprintf(f, "(0x%X, %d)\t\tBranch -1 (-1, -1)\n", TrackID, SectionID);
     if (bProStreetMode)
-        fputs("(0, 0)\t\tSet CONTROLLER = 120\n", f);
-    fprintf(f, "(0, 0)\t\tBranch %d (-1, 0)\n", AppendNodeIndex);
+        fprintf(f, "(0x%X, %d)\t\tSet CONTROLLER = 120\n", TrackID, SectionID);
+    fprintf(f, "(0x%X, %d)\t\tBranch %d (-1, 0)\n", TrackID, SectionID, AppendNodeIndex);
     fputs("\t}\n", f);
     fputs("}\n", f);
     fclose(f);
@@ -3945,8 +3980,8 @@ int main(int argc, char* argv[])
             << "USAGE (extract all samples): " << argv[0] << " -sa MPFfile MusTrackFile [OutSampleFolder]\n"\
             << "USAGE (update samples): " << argv[0] << " -su MPFfile SampleFolder\n"\
             << "USAGE (shift sample names): " << argv[0] << " -ss SampleFolder shiftAmount\n"\
-            << "USAGE (append a new slot): " << argv[0] << " -a sourceMapFile\n"\
-            << "USAGE (append a new slot (NFS Pro Street)): " << argv[0] << " -ap sourceMapFile\n"\
+            << "USAGE (append a new slot): " << argv[0] << " -a sourceMapFile [TrackID] [SectionID]\n"\
+            << "USAGE (append a new slot (NFS Pro Street)): " << argv[0] << " -ap sourceMapFile [TrackID] [SectionID]\n"\
             << "USAGE (concat files): " << argv[0] << " -t destinationMapFile sourceMapFile\n"\
             << "\n"\
             << "For sample updating, the MUS file will be generated with the name of the MPF and placed next to it. You MUST have all files from the lowest to highest number!\n"\
@@ -4021,7 +4056,7 @@ int main(int argc, char* argv[])
             if (argc < 4)
             {
                 cout << "ERROR: not enough arguments for shifting!\n"\
-                    << "USAGE (shift sample names): " << argv[0] << " -ss SampleFolder shiftAmount\n";
+                     << "USAGE (shift sample names): " << argv[0] << " -ss SampleFolder shiftAmount\n";
                 return -1;
             }
             return ShiftSampleNamesInFolder(argv[2], stoi(argv[3]));
@@ -4047,13 +4082,15 @@ int main(int argc, char* argv[])
     // appending mode
     if ((argv[1][0] == '-') && argv[1][1] == 'a')
     {
+        uint32_t TrackID = 0x11000001;
+        uint32_t SectionID = 0;
+
         if (argc < 3)
         {
             cout << "ERROR: not enough arguments for appending!\n"\
-                << "USAGE (append a new slot): " << argv[0] << " -a[p] sourceMapFile\n";
+                 << "USAGE (append a new slot): " << argv[0] << " -a[p] sourceMapFile [TrackID] [SectionID]\n";
             return -1;
         }
-
 
         if (FindLastBits(argv[2]) < 0)
         {
@@ -4061,7 +4098,17 @@ int main(int argc, char* argv[])
             return -1;
         }
 
-        if (AppendSlot(argv[2], (argv[1][2] == 'p')) < 0)
+        if (argc > 3)
+        {
+            TrackID = stoul(argv[3], nullptr, 16);
+        }
+
+        if (argc > 4)
+        {
+            SectionID = stoul(argv[4]);
+        }
+
+        if (AppendSlot(argv[2], (argv[1][2] == 'p'), TrackID, SectionID) < 0)
         {
             cout << "ERROR: Can't append the slot!\n";
             return -1;
@@ -4075,7 +4122,7 @@ int main(int argc, char* argv[])
         if (argc < 4)
         {
             cout << "ERROR: not enough arguments for concat!\n"\
-                << "USAGE (concat files): " << argv[0] << " -t destinationMapFile sourceMapFile\n";
+                 << "USAGE (concat files): " << argv[0] << " -t destinationMapFile sourceMapFile\n";
             return -1;
         }
 
